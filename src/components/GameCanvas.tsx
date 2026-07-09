@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getDifficultyConfig } from '../game/difficultyConfig'
 import { SoundManager } from '../game/SoundManager'
-import type { Fish, Ripple, SessionSettings, SessionStats } from '../game/types'
+import { copy, languageNames } from '../i18n'
+import type {
+  Fish,
+  Language,
+  Ripple,
+  SessionSettings,
+  SessionStats,
+} from '../game/types'
 
 type Props = {
   settings: SessionSettings
+  language: Language
+  onLanguageChange: (language: Language) => void
   paused: boolean
   onPauseToggle: () => void
   onStop: (stats: SessionStats) => void
@@ -223,7 +232,14 @@ function drawRipple(ctx: CanvasRenderingContext2D, ripple: Ripple) {
   ctx.restore()
 }
 
-export function GameCanvas({ settings, paused, onPauseToggle, onStop }: Props) {
+export function GameCanvas({
+  settings,
+  language,
+  onLanguageChange,
+  paused,
+  onPauseToggle,
+  onStop,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationRef = useRef<number>(0)
   const fishRef = useRef<Fish[]>([])
@@ -243,6 +259,7 @@ export function GameCanvas({ settings, paused, onPauseToggle, onStop }: Props) {
   )
   const decorations = useMemo(createDecorations, [])
   const [elapsed, setElapsed] = useState(0)
+  const t = copy[language]
 
   const buildStats = () => {
     const stats = statsRef.current
@@ -465,22 +482,34 @@ export function GameCanvas({ settings, paused, onPauseToggle, onStop }: Props) {
     settings.timer > 0 ? Math.max(0, Math.ceil(settings.timer - elapsed)) : null
 
   return (
-    <main className="game-screen">
+    <main className="game-screen" lang={language === 'zh' ? 'zh-Hans' : 'en'}>
       <canvas
         ref={canvasRef}
         className="pond-canvas"
-        aria-label="Fishing Pond game canvas"
+        aria-label={t.gameCanvas}
         onPointerDown={handlePointerDown}
       />
-      <div className="game-controls" aria-label="Owner controls">
-        <button type="button" onClick={onPauseToggle} aria-label="Pause game">
-          {paused ? 'Resume' : 'Pause'}
+      <div className="game-controls" aria-label={t.ownerControls}>
+        <div className="game-language-switch" aria-label={t.language}>
+          {(['en', 'zh'] as const).map((item) => (
+            <button
+              className={language === item ? 'selected' : ''}
+              key={item}
+              type="button"
+              onClick={() => onLanguageChange(item)}
+            >
+              {languageNames[item]}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
+          {paused ? t.resume : t.pause}
         </button>
         <button type="button" onClick={() => onStop(buildStats())}>
-          Stop
+          {t.stop}
         </button>
         {remaining !== null && (
-          <span aria-label="Time remaining">
+          <span aria-label={t.timeRemaining}>
             {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
           </span>
         )}

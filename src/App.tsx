@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { GameCanvas } from './components/GameCanvas'
 import { ModeSelector } from './components/ModeSelector'
 import { SessionSummary } from './components/SessionSummary'
-import type { SessionSettings, SessionStats } from './game/types'
+import type { Language, SessionSettings, SessionStats } from './game/types'
 import './App.css'
 
 type Screen = 'setup' | 'game' | 'summary'
@@ -16,6 +16,7 @@ const initialSettings: SessionSettings = {
 function App() {
   const [screen, setScreen] = useState<Screen>('setup')
   const [settings, setSettings] = useState(initialSettings)
+  const [language, setLanguage] = useState<Language>('en')
   const [paused, setPaused] = useState(false)
   const [stats, setStats] = useState<SessionStats | null>(null)
 
@@ -34,6 +35,8 @@ function App() {
     return (
       <GameCanvas
         settings={settings}
+        language={language}
+        onLanguageChange={setLanguage}
         paused={paused}
         onPauseToggle={() => setPaused((value) => !value)}
         onStop={stopGame}
@@ -45,6 +48,8 @@ function App() {
     return (
       <SessionSummary
         settings={settings}
+        language={language}
+        onLanguageChange={setLanguage}
         stats={stats}
         onRestart={startGame}
         onSetup={() => setScreen('setup')}
@@ -55,6 +60,8 @@ function App() {
   return (
     <ModeSelector
       settings={settings}
+      language={language}
+      onLanguageChange={setLanguage}
       onChange={setSettings}
       onStart={startGame}
     />

@@ -46,6 +46,32 @@ p {
   max-width: 1080px;
 }
 
+.language-switch {
+  display: inline-flex;
+  gap: 6px;
+  width: fit-content;
+  padding: 6px;
+  border-radius: 8px;
+  background: rgba(5, 45, 66, 0.12);
+}
+
+.language-switch button,
+.game-language-switch button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #073247;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.language-switch button.selected,
+.game-language-switch button.selected {
+  background: #fff7ba;
+  color: #052b3f;
+}
+
 fieldset {
   min-width: 0;
   margin: 0;
@@ -197,6 +223,11 @@ legend {
   font-weight: 850;
 }
 
+.game-language-switch {
+  display: flex;
+  gap: 6px;
+}
+
 .game-controls span {
   padding: 0 10px;
   background: rgba(255, 246, 163, 0.92);
@@ -278,5 +309,9 @@ dd {
     left: max(10px, env(safe-area-inset-left));
     right: max(10px, env(safe-area-inset-right));
     justify-content: flex-end;
+  }
+
+  .game-language-switch {
+    display: none;
   }
 }

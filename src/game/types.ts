@@ -1,5 +1,6 @@
 export type CatAge = 'kitten' | 'adult' | 'senior'
 export type CatPersonality = 'calm' | 'curious' | 'hunter' | 'lazy'
+export type Language = 'en' | 'zh'
 export type TimerOption = 300 | 600 | 0
 
 export type DifficultyConfig = {

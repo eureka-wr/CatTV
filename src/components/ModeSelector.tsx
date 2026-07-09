@@ -1,112 +1,111 @@
-import type { CatAge, CatPersonality, SessionSettings, TimerOption } from '../game/types'
+import { copy, languageNames } from '../i18n'
+import type { CatAge, CatPersonality, Language, SessionSettings, TimerOption } from '../game/types'
 
 type Props = {
   settings: SessionSettings
+  language: Language
+  onLanguageChange: (language: Language) => void
   onChange: (settings: SessionSettings) => void
   onStart: () => void
 }
 
-const ages: Array<{ value: CatAge; label: string; detail: string }> = [
-  { value: 'kitten', label: 'Kitten', detail: 'Large, bright, forgiving fish' },
-  { value: 'adult', label: 'Adult', detail: 'Balanced motion and hiding' },
-  { value: 'senior', label: 'Senior', detail: 'Slow, clear, gentle play' },
-]
+const ages: CatAge[] = ['kitten', 'adult', 'senior']
+const personalities: CatPersonality[] = ['calm', 'curious', 'hunter', 'lazy']
+const timers: TimerOption[] = [300, 600, 0]
 
-const personalities: Array<{
-  value: CatPersonality
-  label: string
-  detail: string
-}> = [
-  { value: 'calm', label: 'Calm', detail: 'Relaxed pond watching' },
-  { value: 'curious', label: 'Curious', detail: 'Peeks, bubbles, small jumps' },
-  { value: 'hunter', label: 'Hunter', detail: 'Sharper turns and escapes' },
-  { value: 'lazy', label: 'Lazy', detail: 'Slow fish near the middle' },
-]
+export function ModeSelector({
+  settings,
+  language,
+  onLanguageChange,
+  onChange,
+  onStart,
+}: Props) {
+  const t = copy[language]
 
-const timers: Array<{ value: TimerOption; label: string }> = [
-  { value: 300, label: '5 min' },
-  { value: 600, label: '10 min' },
-  { value: 0, label: 'Endless' },
-]
-
-export function ModeSelector({ settings, onChange, onStart }: Props) {
   return (
-    <main className="setup-screen">
+    <main className="setup-screen" lang={language === 'zh' ? 'zh-Hans' : 'en'}>
+      <div className="language-switch" aria-label={t.language}>
+        {(['en', 'zh'] as const).map((item) => (
+          <button
+            className={language === item ? 'selected' : ''}
+            key={item}
+            type="button"
+            onClick={() => onLanguageChange(item)}
+          >
+            {languageNames[item]}
+          </button>
+        ))}
+      </div>
+
       <section className="setup-intro" aria-labelledby="game-title">
-        <p className="eyebrow">Cat TV Game 01</p>
-        <h1 id="game-title">Fishing Pond</h1>
-        <p>
-          A soft, high-contrast pond where fish glide, pause, hide, and splash
-          away when touched.
-        </p>
+        <p className="eyebrow">{t.appLabel}</p>
+        <h1 id="game-title">{t.title}</h1>
+        <p>{t.intro}</p>
       </section>
 
-      <section className="setup-controls" aria-label="Game setup">
+      <section className="setup-controls" aria-label={t.startGame}>
         <fieldset>
-          <legend>Cat age</legend>
+          <legend>{t.catAge}</legend>
           <div className="option-grid three">
             {ages.map((age) => (
               <button
-                className={settings.age === age.value ? 'selected' : ''}
-                key={age.value}
+                className={settings.age === age ? 'selected' : ''}
+                key={age}
                 type="button"
-                onClick={() => onChange({ ...settings, age: age.value })}
+                onClick={() => onChange({ ...settings, age })}
               >
-                <strong>{age.label}</strong>
-                <span>{age.detail}</span>
+                <strong>{t.ages[age].label}</strong>
+                <span>{t.ages[age].detail}</span>
               </button>
             ))}
           </div>
         </fieldset>
 
         <fieldset>
-          <legend>Cat personality</legend>
+          <legend>{t.catPersonality}</legend>
           <div className="option-grid four">
             {personalities.map((personality) => (
               <button
                 className={
-                  settings.personality === personality.value ? 'selected' : ''
+                  settings.personality === personality ? 'selected' : ''
                 }
-                key={personality.value}
+                key={personality}
                 type="button"
                 onClick={() =>
-                  onChange({ ...settings, personality: personality.value })
+                  onChange({ ...settings, personality })
                 }
               >
-                <strong>{personality.label}</strong>
-                <span>{personality.detail}</span>
+                <strong>{t.personalities[personality].label}</strong>
+                <span>{t.personalities[personality].detail}</span>
               </button>
             ))}
           </div>
         </fieldset>
 
         <fieldset>
-          <legend>Timer</legend>
+          <legend>{t.timer}</legend>
           <div className="timer-row">
             {timers.map((timer) => (
               <button
-                className={settings.timer === timer.value ? 'selected' : ''}
-                key={timer.value}
+                className={settings.timer === timer ? 'selected' : ''}
+                key={timer}
                 type="button"
-                onClick={() => onChange({ ...settings, timer: timer.value })}
+                onClick={() => onChange({ ...settings, timer })}
               >
-                {timer.label}
+                {t.timers[timer]}
               </button>
             ))}
           </div>
         </fieldset>
 
         <button className="primary-action" type="button" onClick={onStart}>
-          Start Game
+          {t.startGame}
         </button>
       </section>
 
       <aside className="safety-note">
-        <strong>Owner note</strong>
-        <span>
-          Use guided access or screen lock if available. Supervise play and stop
-          if your cat seems frustrated or overstimulated.
-        </span>
+        <strong>{t.ownerNote}</strong>
+        <span>{t.safety}</span>
       </aside>
     </main>
   )
