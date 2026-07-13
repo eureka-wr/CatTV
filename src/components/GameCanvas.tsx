@@ -38,6 +38,8 @@ type Round = {
   spawnY: number
   targetX: number
   targetY: number
+  controlX: number
+  controlY: number
   fishX: number
   fishY: number
   fishSize: number
@@ -68,8 +70,6 @@ const fishTypes = [
 ]
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min)
-const lerp = (start: number, end: number, amount: number) =>
-  start + (end - start) * amount
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3)
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
@@ -99,7 +99,33 @@ function pickTarget(width: number, height: number, x: number, y: number) {
     { x: rand(width * 0.16, width * 0.84), y: height + 70, distance: height - y },
   ]
 
-  return exits.sort((a, b) => a.distance - b.distance)[0]
+  return exits.sort((a, b) => b.distance - a.distance)[0]
+}
+
+function createControlPoint(
+  width: number,
+  height: number,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+) {
+  const midpointX = (startX + endX) / 2
+  const midpointY = (startY + endY) / 2
+  const dx = endX - startX
+  const dy = endY - startY
+  const distance = Math.max(1, Math.hypot(dx, dy))
+  const curveAmount = rand(-0.12, 0.12) * distance
+
+  return {
+    x: Math.max(width * 0.12, Math.min(width * 0.88, midpointX + (-dy / distance) * curveAmount)),
+    y: Math.max(height * 0.14, Math.min(height * 0.86, midpointY + (dx / distance) * curveAmount)),
+  }
+}
+
+function quadraticPoint(start: number, control: number, end: number, amount: number) {
+  const inverse = 1 - amount
+  return inverse * inverse * start + 2 * inverse * amount * control + amount * amount * end
 }
 
 function createRound(
@@ -111,9 +137,10 @@ function createRound(
 ): Round {
   const spawn = pickSpawn(width, height)
   const target = pickTarget(width, height, spawn.x, spawn.y)
+  const control = createControlPoint(width, height, spawn.x, spawn.y, target.x, target.y)
   const fishType = fishTypes[Math.floor(Math.random() * fishTypes.length)]
   const distance = Math.hypot(target.x - spawn.x, target.y - spawn.y)
-  const swimDuration = Math.max(2.2, Math.min(5.2, distance / (config.fishSpeed * 0.92)))
+  const swimDuration = Math.max(3.4, Math.min(7.4, distance / (config.fishSpeed * 0.78)))
 
   return {
     id,
@@ -123,9 +150,11 @@ function createRound(
     spawnY: spawn.y,
     targetX: target.x,
     targetY: target.y,
+    controlX: control.x,
+    controlY: control.y,
     fishX: spawn.x,
     fishY: spawn.y,
-    fishSize: config.fishSize * 1.18,
+    fishSize: config.fishSize * 1.34,
     fishType: fishType.type,
     color: fishType.color,
     accent: fishType.accent,
@@ -221,28 +250,28 @@ function drawBubbleSpot(
   now: number,
 ) {
   const age = now - round.phaseStartedAt
-  const pulse = (Math.sin(age * 7) + 1) / 2
-  const outer = 42 + pulse * 24
+  const pulse = (Math.sin(age * 4.2) + 1) / 2
+  const outer = 28 + pulse * 10
 
   ctx.save()
-  ctx.globalAlpha = 0.8
+  ctx.globalAlpha = 0.42
   ctx.strokeStyle = '#fff7a8'
-  ctx.lineWidth = 4
+  ctx.lineWidth = 2.4
   ctx.beginPath()
   ctx.ellipse(round.spawnX, round.spawnY, outer, outer * 0.52, 0, 0, Math.PI * 2)
   ctx.stroke()
 
-  for (let i = 0; i < 9; i += 1) {
-    const phase = (age * 1.35 + i * 0.17) % 1
-    const angle = i * 1.92
-    const radius = 10 + phase * 42
-    ctx.globalAlpha = 1 - phase * 0.72
+  for (let i = 0; i < 4; i += 1) {
+    const phase = (age * 0.72 + i * 0.28) % 1
+    const angle = i * 2.15
+    const radius = 8 + phase * 24
+    ctx.globalAlpha = (1 - phase * 0.72) * 0.62
     ctx.fillStyle = i % 2 ? '#ffffff' : '#fff1a6'
     ctx.beginPath()
     ctx.arc(
       round.spawnX + Math.cos(angle) * radius,
       round.spawnY + Math.sin(angle) * radius * 0.46 - phase * 18,
-      6 + (1 - phase) * 6,
+      4 + (1 - phase) * 3,
       0,
       Math.PI * 2,
     )
@@ -252,13 +281,40 @@ function drawBubbleSpot(
 }
 
 function drawFish(ctx: CanvasRenderingContext2D, round: Round, now: number) {
-  const angle = Math.atan2(round.targetY - round.spawnY, round.targetX - round.spawnX)
+  const angle = Math.atan2(
+    round.targetY - round.controlY,
+    round.targetX - round.controlX,
+  )
   const jumpAge = Math.max(0, now - round.bornAt)
   const jump = Math.sin(Math.min(1, jumpAge / 0.55) * Math.PI) * round.fishSize * 0.62
 
   ctx.save()
+  const glow = ctx.createRadialGradient(
+    round.fishX,
+    round.fishY - jump,
+    round.fishSize * 0.2,
+    round.fishX,
+    round.fishY - jump,
+    round.fishSize * 2.05,
+  )
+  glow.addColorStop(0, 'rgba(255, 250, 188, 0.52)')
+  glow.addColorStop(0.5, 'rgba(255, 238, 102, 0.2)')
+  glow.addColorStop(1, 'rgba(255, 238, 102, 0)')
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(round.fishX, round.fishY - jump, round.fishSize * 2.05, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
   ctx.translate(round.fishX, round.fishY - jump)
   ctx.rotate(angle)
+
+  ctx.strokeStyle = '#fff8b6'
+  ctx.lineWidth = Math.max(4, round.fishSize * 0.11)
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize * 1.05, round.fishSize * 0.52, 0, 0, Math.PI * 2)
+  ctx.stroke()
 
   ctx.fillStyle = round.color
   ctx.beginPath()
@@ -556,8 +612,18 @@ export function GameCanvas({
         } else if (round.phase === 'fish') {
           const progress = clamp01((now - round.phaseStartedAt) / round.swimDuration)
           const eased = easeOutCubic(progress)
-          round.fishX = lerp(round.spawnX, round.targetX, eased)
-          round.fishY = lerp(round.spawnY, round.targetY, eased)
+          round.fishX = quadraticPoint(
+            round.spawnX,
+            round.controlX,
+            round.targetX,
+            eased,
+          )
+          round.fishY = quadraticPoint(
+            round.spawnY,
+            round.controlY,
+            round.targetY,
+            eased,
+          )
 
           if (progress >= 1) {
             round.phase = 'miss'
@@ -639,7 +705,7 @@ export function GameCanvas({
     const distance = Math.hypot(round.fishX - x, round.fishY - y)
     if (
       round.phase === 'fish' &&
-      distance <= config.reactionDistance + round.fishSize * 0.72
+      distance <= config.reactionDistance + round.fishSize * 0.82
     ) {
       statsRef.current.catches += 1
       statsRef.current.reactionTimes.push(now - round.bornAt)
