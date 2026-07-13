@@ -1,69 +1,93 @@
-# CatTV: Fishing Pond
+# Cat TV
 
-CatTV is a small touch-screen cat enrichment project. The first game,
-**Fishing Pond**, turns a tablet or phone into a calm digital pond where fish
-swim, hide, bubble, and splash away when touched.
+Cat TV is a touch-screen enrichment game collection for cats. It turns a tablet,
+phone, or browser window into a set of simple moving-animal games designed to
+attract attention, invite tracking, and give the cat a clear catch moment.
 
-The project is built as a lightweight React + Canvas web app so it is easy to
-run, test, and extend into future Cat TV games.
+The project is a lightweight React + Canvas web app. It currently includes a
+12-game kitten training sequence, starting with slow, obvious targets and
+gradually moving toward faster, less predictable motion.
 
-![Fishing Pond setup screen](docs/screenshots/setup-screen.png)
+![Cat TV game lobby](docs/screenshots/lobby.png)
 
-## Purpose
+## Project Goal
 
-Fishing Pond is designed for owners who want a simple, supervised play session
-for cats on an iPad, tablet, or mobile phone. The experience favors smooth
-motion, clear fish silhouettes, gentle audio feedback, and low-distraction
-controls over complicated game mechanics.
+Cat TV is built around supervised cat play. The interface stays mostly visual:
+large animal icons, full-screen animated scenes, and icon-only in-game controls.
+The cat sees a target, tracks it, and can tap or paw the screen to catch it.
 
-It is not meant to be a game cats play alone. Owners should stay nearby, use
-screen lock or guided access when possible, and stop the session if the cat
-seems frustrated or overstimulated.
+The design goals are:
 
-## Features
+- Give cats a simple focus target instead of a busy human game UI.
+- Use animal-like movement: swimming, running, hopping, flying, crawling, and glowing.
+- Keep every round understandable: cue, target appears, target moves, catch or miss.
+- Let the owner switch games quickly without leaving the play session.
+- Keep the code easy to extend with more small-animal games.
 
-- Fullscreen animated pond with soft water texture.
-- 3 to 5 fish visible depending on the selected mode.
-- Fish swim horizontally and diagonally, change direction, pause, hide, jump,
-  and create bubbles.
-- Touching near a fish triggers a quick escape, splash ripple, gentle sound, and
-  internal catch tracking.
-- Missed touches create a small ripple with no penalty.
-- Setup screen for cat age, personality, and timer.
-- Minimal in-game owner controls: pause, stop, and optional countdown.
-- Session summary with duration, touches, fish reactions, average reaction time,
-  and favorite fish type.
-- Reusable game foundations for future CatTV games: mode selection, difficulty
-  config, touch handling, animation loop, sound manager, and session summary.
+## Current Games
 
-![Fishing Pond game screen](docs/screenshots/game-screen.png)
+The lobby contains 12 animal games in a gradual training sequence:
 
-## Game Modes
+| # | Animal | Scene | Cue | Movement | Training Focus |
+|---|---|---|---|---|---|
+| 1 | Fish | Pond | Bubbles | Slow curved swim | First focus and catch |
+| 2 | Mouse | Grass | Grass wiggle | Ground run | Horizontal tracking |
+| 3 | Dragonfly | Air / water | Spark points | Light flight | Air tracking |
+| 4 | Butterfly | Flowers | Spark / petal motion | Floating flutter | Smooth vertical tracking |
+| 5 | Bird | Branches | Leaf shake | Short dash flight | Faster attention shift |
+| 6 | Cricket | Meadow | Grass tremble | Hop movement | Predicting jumps |
+| 7 | Frog | Pond edge | Water / plant cue | Larger hops | Timing the catch |
+| 8 | Gecko | Wall | Wall ripple | Crawling path | Edge and wall tracking |
+| 9 | Beetle | Leaves | Leaf movement | Skitter crawl | Small target tracking |
+| 10 | Snake | Sand | Sand ripple | S-shaped motion | Curved path prediction |
+| 11 | Squirrel | Branches | Branch shake | Fast branch dash | Rapid direction changes |
+| 12 | Firefly | Night grass | Glow points | Blinking drift | Harder visual tracking |
 
-Cat age changes the baseline difficulty:
+![Fish game](docs/screenshots/fish-game.png)
 
-- **Kitten**: bigger fish, slower speed, brighter and more forgiving.
-- **Adult**: balanced fish size, speed, hiding, and direction changes.
-- **Senior**: large fish, slower movement, high contrast, and gentler sound.
+![Firefly game](docs/screenshots/firefly-game.png)
 
-Cat personality adjusts behavior:
+## How The Games Work
 
-- **Calm**: relaxed movement for watching.
-- **Curious**: more bubbles, peeking, and occasional jumps.
-- **Hunter**: faster fish, sharper turns, more escape energy.
-- **Lazy**: larger slow fish that stay easier to reach.
+Each game uses the same round structure:
 
-## How To Use
+1. A small cue appears, such as bubbles, grass movement, leaf shake, or glowing dots.
+2. One animal appears as the main target.
+3. The animal moves toward the edge of the screen.
+4. If the cat touches near the animal, the game shows a rewarding burst of light,
+   ripples, petals, or glow.
+5. If the animal escapes, the screen briefly darkens and a new round starts.
 
-1. Start the app on a tablet, iPad, or phone.
-2. Choose the cat age and personality that best fits the session.
-3. Pick a 5 minute, 10 minute, or endless timer.
-4. Tap **Start Game** and place the device in landscape orientation if possible.
-5. Let the cat watch and touch the fish while you supervise.
-6. Tap **Stop** to view the session summary.
+The full session defaults to 3 minutes. There is no setup screen, no score screen,
+and no text-heavy cat-facing interface.
 
-For real cat testing, keep the volume low, avoid long sessions at first, and
-clean the screen before and after play.
+## Navigation
+
+From the lobby:
+
+- Tap an animal icon to start that game.
+- Hover or focus an icon to show the animal name.
+- The lobby scrolls vertically on smaller screens.
+
+Inside a game, the controls are icon-only and placed on the left:
+
+- Previous game
+- Pause / resume
+- Home / lobby
+- Next game
+
+This makes it easy to move through the full training sequence without returning
+to the lobby after every game.
+
+## Safety Notes
+
+This app is meant for supervised play.
+
+- Stay nearby while the cat plays.
+- Use Guided Access, screen pinning, or another screen-lock feature when possible.
+- Keep volume low and avoid long first sessions.
+- Stop if the cat paws too hard, becomes frustrated, or loses interest.
+- Clean the screen before and after play.
 
 ## Run Locally
 
@@ -85,49 +109,51 @@ Open:
 http://127.0.0.1:5173/
 ```
 
-If system Node or pnpm is unavailable in this Codex workspace, use the bundled
-runtime:
+## Verify
+
+Run the test suite:
 
 ```bash
-PATH="/Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
-  /Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm dev --host 127.0.0.1
+pnpm test
 ```
 
-## Verify
+Build the app:
 
 ```bash
 pnpm build
-pnpm lint
 ```
 
-Bundled runtime version:
+Run lint:
 
 ```bash
-PATH="/Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
-  /Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm build
-
-PATH="/Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
-  /Users/eureka6/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm lint
+pnpm lint
 ```
 
 ## Project Structure
 
 ```text
 src/
-  App.tsx                         App screen flow
+  App.tsx                  App screen flow and game switching
   components/
-    GameCanvas.tsx                Canvas pond, animation loop, touch handling
-    ModeSelector.tsx              Owner setup screen
-    SessionSummary.tsx            End-of-session summary
+    GameLobby.tsx          12-animal visual game lobby
+    GameCanvas.tsx         Canvas scenes, movement, cue, catch, reward, miss logic
   game/
-    difficultyConfig.ts           Age/personality difficulty rules
-    SoundManager.ts               Gentle splash sound
-    types.ts                      Shared game/session types
+    games.ts               Game IDs and sequence order
+    difficultyConfig.ts    Shared speed, size, and reaction presets
+    session.ts             Default 3-minute session and helpers
+    SoundManager.ts        Gentle splash/reward sound
+    types.ts               Shared TypeScript types
+docs/
+  screenshots/             README screenshots
 ```
 
-## Safety Notes
+## Deployment
 
-- Supervise play. Do not leave the cat alone with the device.
-- Use guided access, screen pinning, or a similar screen lock feature.
-- Keep sounds gentle and avoid bright flashing effects.
-- Stop if the cat paws too hard, becomes frustrated, or loses interest.
+The project is deployed from GitHub to Vercel. Pushing to the connected GitHub
+repository updates the public site through the existing Vercel integration.
+
+Production site:
+
+```text
+https://fish.cattv.space
+```
