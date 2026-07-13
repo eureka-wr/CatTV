@@ -1,35 +1,37 @@
 import { useCallback, useState } from 'react'
 import { GameCanvas } from './components/GameCanvas'
-import { ModeSelector } from './components/ModeSelector'
-import { SessionSummary } from './components/SessionSummary'
+import { GameLobby, type GameId } from './components/GameLobby'
 import type { Language, SessionStats } from './game/types'
 import { DEFAULT_SETTINGS } from './game/session'
 import './App.css'
 
-type Screen = 'setup' | 'game' | 'summary'
+type Screen = 'lobby' | 'game'
 
 function App() {
-  const [screen, setScreen] = useState<Screen>('setup')
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [screen, setScreen] = useState<Screen>('lobby')
   const [language, setLanguage] = useState<Language>('en')
   const [paused, setPaused] = useState(false)
-  const [stats, setStats] = useState<SessionStats | null>(null)
+  const [selectedGame, setSelectedGame] = useState<GameId | null>(null)
 
-  const startGame = () => {
+  const startGame = (gameId: GameId) => {
+    if (gameId !== 'fish') {
+      return
+    }
     setPaused(false)
-    setStats(null)
+    setSelectedGame(gameId)
     setScreen('game')
   }
 
-  const stopGame = useCallback((nextStats: SessionStats) => {
-    setStats(nextStats)
-    setScreen('summary')
+  const stopGame = useCallback((_nextStats: SessionStats) => {
+    setPaused(false)
+    setSelectedGame(null)
+    setScreen('lobby')
   }, [])
 
-  if (screen === 'game') {
+  if (screen === 'game' && selectedGame === 'fish') {
     return (
       <GameCanvas
-        settings={settings}
+        settings={DEFAULT_SETTINGS}
         language={language}
         onLanguageChange={setLanguage}
         paused={paused}
@@ -39,25 +41,9 @@ function App() {
     )
   }
 
-  if (screen === 'summary' && stats) {
-    return (
-      <SessionSummary
-        settings={settings}
-        language={language}
-        onLanguageChange={setLanguage}
-        stats={stats}
-        onRestart={startGame}
-        onSetup={() => setScreen('setup')}
-      />
-    )
-  }
-
   return (
-    <ModeSelector
-      settings={settings}
+    <GameLobby
       language={language}
-      onLanguageChange={setLanguage}
-      onChange={setSettings}
       onStart={startGame}
     />
   )

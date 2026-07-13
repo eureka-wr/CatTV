@@ -9,7 +9,7 @@ import {
   serializeSessionStats,
   WakeLockController,
 } from '../game/session'
-import { copy, languageNames } from '../i18n'
+import { copy } from '../i18n'
 import type { DifficultyConfig, Language, SessionSettings, SessionStats } from '../game/types'
 
 type Props = {
@@ -425,7 +425,7 @@ function drawMissOverlay(ctx: CanvasRenderingContext2D, width: number, height: n
 export function GameCanvas({
   settings,
   language,
-  onLanguageChange,
+  onLanguageChange: _onLanguageChange,
   paused,
   onPauseToggle,
   onStop,
@@ -452,7 +452,7 @@ export function GameCanvas({
     [settings.age, settings.personality],
   )
   const decorations = useMemo(createDecorations, [])
-  const [elapsed, setElapsed] = useState(0)
+  const [, setElapsed] = useState(0)
   const [pageHidden, setPageHidden] = useState(document.hidden)
   const t = copy[language]
   const selectedDuration = durationToSeconds(settings.duration)
@@ -748,9 +748,6 @@ export function GameCanvas({
     })
   }
 
-  const remaining =
-    selectedDuration !== null ? Math.max(0, Math.ceil(selectedDuration - elapsed)) : null
-
   const handleStopPointerDown = () => {
     if (!isEndless) {
       stopSession()
@@ -776,35 +773,29 @@ export function GameCanvas({
         onPointerDown={handlePointerDown}
       />
       <div className="game-controls" aria-label={t.ownerControls}>
-        <div className="game-language-switch" aria-label={t.language}>
-          {(['en', 'zh'] as const).map((item) => (
-            <button
-              className={language === item ? 'selected' : ''}
-              key={item}
-              type="button"
-              onClick={() => onLanguageChange(item)}
-            >
-              {languageNames[item]}
-            </button>
-          ))}
-        </div>
-        <button type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
-          {paused ? t.resume : t.pause}
+        <button className="icon-control" type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
+          {paused ? (
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path d="M18 13v22l17-11z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path d="M15 12h7v24h-7zM27 12h7v24h-7z" />
+            </svg>
+          )}
         </button>
         <button
-          className={isEndless ? 'hold-stop' : ''}
+          className={`icon-control ${isEndless ? 'hold-stop' : ''}`}
           type="button"
           onPointerDown={handleStopPointerDown}
           onPointerLeave={clearStopHold}
           onPointerUp={clearStopHold}
+          aria-label={isEndless ? t.holdToStop : t.stop}
         >
-          {isEndless ? t.holdToStop : t.stop}
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+          </svg>
         </button>
-        {remaining !== null && (
-          <span aria-label={t.timeRemaining}>
-            {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
-          </span>
-        )}
       </div>
     </main>
   )
