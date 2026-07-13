@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 import { getDifficultyConfig } from '../game/difficultyConfig'
 import { SoundManager } from '../game/SoundManager'
 import {
@@ -9,13 +10,7 @@ import {
   WakeLockController,
 } from '../game/session'
 import { copy, languageNames } from '../i18n'
-import type {
-  Fish,
-  Language,
-  Ripple,
-  SessionSettings,
-  SessionStats,
-} from '../game/types'
+import type { DifficultyConfig, Language, SessionSettings, SessionStats } from '../game/types'
 
 type Props = {
   settings: SessionSettings
@@ -33,6 +28,38 @@ type PondDecoration = {
   kind: 'plant' | 'rock' | 'lily'
 }
 
+type RoundPhase = 'bubbling' | 'fish' | 'reward' | 'miss'
+
+type Round = {
+  id: number
+  phase: RoundPhase
+  phaseStartedAt: number
+  spawnX: number
+  spawnY: number
+  targetX: number
+  targetY: number
+  fishX: number
+  fishY: number
+  fishSize: number
+  fishType: string
+  color: string
+  accent: string
+  bubbleDuration: number
+  swimDuration: number
+  rewardUntil: number
+  missUntil: number
+  bornAt: number
+}
+
+type SimpleRipple = {
+  id: number
+  x: number
+  y: number
+  age: number
+  maxAge: number
+  kind: 'tap' | 'catch' | 'bubble' | 'reward'
+}
+
 const fishTypes = [
   { type: 'sunny gold', color: '#ffd54d', accent: '#fff2a6' },
   { type: 'moon blue', color: '#6fe3ff', accent: '#f4fdff' },
@@ -41,72 +68,94 @@ const fishTypes = [
 ]
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min)
-const chance = (value: number) => Math.random() < value
-
-function makeFish(
-  id: number,
-  width: number,
-  height: number,
-  size: number,
-  speed: number,
-  now: number,
-  preferCenter: boolean,
-): Fish {
-  const angle = rand(-0.6, 0.6) + (Math.random() > 0.5 ? 0 : Math.PI)
-  const fishType = fishTypes[Math.floor(Math.random() * fishTypes.length)]
-  const x = preferCenter ? rand(width * 0.28, width * 0.72) : rand(80, width - 80)
-  return {
-    id,
-    x,
-    y: rand(height * 0.22, height * 0.82),
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed * 0.45,
-    size,
-    color: fishType.color,
-    accent: fishType.accent,
-    type: fishType.type,
-    hidden: false,
-    pausedUntil: 0,
-    hideUntil: 0,
-    jumpUntil: 0,
-    bornAt: now,
-    nextDecisionAt: now + rand(0.5, 2.2),
-    nextBubbleAt: now + rand(3, 8),
-    respawnAt: 0,
-    escapingUntil: 0,
-  }
-}
+const lerp = (start: number, end: number, amount: number) =>
+  start + (end - start) * amount
+const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3)
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 function createDecorations(): PondDecoration[] {
   return [
-    { kind: 'plant', x: 0.12, y: 0.72, scale: 1.1 },
-    { kind: 'plant', x: 0.82, y: 0.68, scale: 1.3 },
-    { kind: 'rock', x: 0.24, y: 0.83, scale: 1.05 },
-    { kind: 'rock', x: 0.68, y: 0.78, scale: 1.18 },
-    { kind: 'lily', x: 0.36, y: 0.25, scale: 1 },
-    { kind: 'lily', x: 0.72, y: 0.34, scale: 0.86 },
+    { kind: 'plant', x: 0.12, y: 0.76, scale: 1.05 },
+    { kind: 'plant', x: 0.86, y: 0.72, scale: 1.18 },
+    { kind: 'rock', x: 0.22, y: 0.85, scale: 1 },
+    { kind: 'rock', x: 0.7, y: 0.8, scale: 1.12 },
+    { kind: 'lily', x: 0.36, y: 0.25, scale: 0.94 },
+    { kind: 'lily', x: 0.72, y: 0.34, scale: 0.82 },
   ]
+}
+
+function pickSpawn(width: number, height: number) {
+  return {
+    x: rand(width * 0.28, width * 0.72),
+    y: rand(height * 0.26, height * 0.74),
+  }
+}
+
+function pickTarget(width: number, height: number, x: number, y: number) {
+  const exits = [
+    { x: -80, y: rand(height * 0.2, height * 0.82), distance: x },
+    { x: width + 80, y: rand(height * 0.2, height * 0.82), distance: width - x },
+    { x: rand(width * 0.16, width * 0.84), y: -70, distance: y },
+    { x: rand(width * 0.16, width * 0.84), y: height + 70, distance: height - y },
+  ]
+
+  return exits.sort((a, b) => a.distance - b.distance)[0]
+}
+
+function createRound(
+  id: number,
+  width: number,
+  height: number,
+  config: DifficultyConfig,
+  now: number,
+): Round {
+  const spawn = pickSpawn(width, height)
+  const target = pickTarget(width, height, spawn.x, spawn.y)
+  const fishType = fishTypes[Math.floor(Math.random() * fishTypes.length)]
+  const distance = Math.hypot(target.x - spawn.x, target.y - spawn.y)
+  const swimDuration = Math.max(2.2, Math.min(5.2, distance / (config.fishSpeed * 0.92)))
+
+  return {
+    id,
+    phase: 'bubbling',
+    phaseStartedAt: now,
+    spawnX: spawn.x,
+    spawnY: spawn.y,
+    targetX: target.x,
+    targetY: target.y,
+    fishX: spawn.x,
+    fishY: spawn.y,
+    fishSize: config.fishSize * 1.18,
+    fishType: fishType.type,
+    color: fishType.color,
+    accent: fishType.accent,
+    bubbleDuration: rand(1.45, 2.35),
+    swimDuration,
+    rewardUntil: 0,
+    missUntil: 0,
+    bornAt: 0,
+  }
 }
 
 function drawPond(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const gradient = ctx.createLinearGradient(0, 0, width, height)
-  gradient.addColorStop(0, '#aeeeff')
-  gradient.addColorStop(0.46, '#2aa9d6')
-  gradient.addColorStop(1, '#0d5f8b')
+  gradient.addColorStop(0, '#b6f4ff')
+  gradient.addColorStop(0.5, '#35b1d8')
+  gradient.addColorStop(1, '#0f668a')
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, width, height)
 
   ctx.save()
-  ctx.globalAlpha = 0.28
-  for (let i = 0; i < 18; i += 1) {
-    const y = ((i * 73) % height) + Math.sin(i) * 18
+  ctx.globalAlpha = 0.2
+  for (let i = 0; i < 12; i += 1) {
+    const y = ((i * 97) % height) + Math.sin(i) * 16
     ctx.beginPath()
     ctx.moveTo(-40, y)
-    for (let x = -40; x < width + 80; x += 90) {
-      ctx.quadraticCurveTo(x + 45, y + Math.sin(i + x) * 12, x + 90, y)
+    for (let x = -40; x < width + 80; x += 120) {
+      ctx.quadraticCurveTo(x + 60, y + Math.sin(i + x) * 10, x + 120, y)
     }
     ctx.strokeStyle = i % 2 ? '#f2fdff' : '#ffe976'
-    ctx.lineWidth = i % 2 ? 1.5 : 1
+    ctx.lineWidth = i % 2 ? 1.4 : 1
     ctx.stroke()
   }
   ctx.restore()
@@ -166,77 +215,154 @@ function drawDecorations(
   })
 }
 
-function drawFish(ctx: CanvasRenderingContext2D, fish: Fish, now: number) {
-  const direction = fish.vx >= 0 ? 1 : -1
-  const jump = now < fish.jumpUntil ? Math.sin(now * 24) * 10 : 0
-  const isEscaping = now < fish.escapingUntil
+function drawBubbleSpot(
+  ctx: CanvasRenderingContext2D,
+  round: Round,
+  now: number,
+) {
+  const age = now - round.phaseStartedAt
+  const pulse = (Math.sin(age * 7) + 1) / 2
+  const outer = 42 + pulse * 24
 
   ctx.save()
-  ctx.translate(fish.x, fish.y + jump)
-  ctx.scale(direction, 1)
-  ctx.globalAlpha = fish.hidden ? 0.24 : 1
-  ctx.rotate(fish.vy * 0.003)
-
-  ctx.fillStyle = fish.color
+  ctx.globalAlpha = 0.8
+  ctx.strokeStyle = '#fff7a8'
+  ctx.lineWidth = 4
   ctx.beginPath()
-  ctx.ellipse(0, 0, fish.size, fish.size * 0.45, 0, 0, Math.PI * 2)
+  ctx.ellipse(round.spawnX, round.spawnY, outer, outer * 0.52, 0, 0, Math.PI * 2)
+  ctx.stroke()
+
+  for (let i = 0; i < 9; i += 1) {
+    const phase = (age * 1.35 + i * 0.17) % 1
+    const angle = i * 1.92
+    const radius = 10 + phase * 42
+    ctx.globalAlpha = 1 - phase * 0.72
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#fff1a6'
+    ctx.beginPath()
+    ctx.arc(
+      round.spawnX + Math.cos(angle) * radius,
+      round.spawnY + Math.sin(angle) * radius * 0.46 - phase * 18,
+      6 + (1 - phase) * 6,
+      0,
+      Math.PI * 2,
+    )
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawFish(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(round.targetY - round.spawnY, round.targetX - round.spawnX)
+  const jumpAge = Math.max(0, now - round.bornAt)
+  const jump = Math.sin(Math.min(1, jumpAge / 0.55) * Math.PI) * round.fishSize * 0.62
+
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY - jump)
+  ctx.rotate(angle)
+
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize, round.fishSize * 0.46, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.fillStyle = fish.accent
+  ctx.fillStyle = round.accent
   ctx.beginPath()
-  ctx.ellipse(fish.size * 0.2, -fish.size * 0.08, fish.size * 0.38, fish.size * 0.16, 0, 0, Math.PI * 2)
+  ctx.ellipse(round.fishSize * 0.2, -round.fishSize * 0.08, round.fishSize * 0.38, round.fishSize * 0.16, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.fillStyle = fish.color
+  ctx.fillStyle = round.color
   ctx.beginPath()
-  ctx.moveTo(-fish.size * 0.86, 0)
-  ctx.lineTo(-fish.size * 1.42, -fish.size * 0.38)
-  ctx.lineTo(-fish.size * 1.36, fish.size * 0.36)
+  ctx.moveTo(-round.fishSize * 0.86, 0)
+  ctx.lineTo(-round.fishSize * 1.42, -round.fishSize * 0.38)
+  ctx.lineTo(-round.fishSize * 1.36, round.fishSize * 0.36)
   ctx.closePath()
   ctx.fill()
 
   ctx.fillStyle = '#072c3f'
   ctx.beginPath()
-  ctx.arc(fish.size * 0.58, -fish.size * 0.12, fish.size * 0.07, 0, Math.PI * 2)
+  ctx.arc(round.fishSize * 0.58, -round.fishSize * 0.12, round.fishSize * 0.07, 0, Math.PI * 2)
   ctx.fill()
-
-  if (isEscaping) {
-    ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 3
-    ctx.globalAlpha = 0.6
-    ctx.beginPath()
-    ctx.arc(-fish.size * 1.05, 0, fish.size * 0.7, -0.6, 0.6)
-    ctx.stroke()
-  }
-
   ctx.restore()
 }
 
-function drawRipple(ctx: CanvasRenderingContext2D, ripple: Ripple) {
+function drawRipple(ctx: CanvasRenderingContext2D, ripple: SimpleRipple) {
   const progress = ripple.age / ripple.maxAge
-  const radius = progress * (ripple.kind === 'catch' ? 76 : 42)
+  const radius =
+    progress *
+    (ripple.kind === 'reward' ? 150 : ripple.kind === 'catch' ? 96 : 46)
+
   ctx.save()
   ctx.globalAlpha = Math.max(0, 1 - progress)
-  ctx.strokeStyle = ripple.kind === 'bubble' ? '#fff7a8' : '#ffffff'
-  ctx.lineWidth = ripple.kind === 'catch' ? 4 : 2
+  ctx.strokeStyle =
+    ripple.kind === 'bubble' || ripple.kind === 'reward' ? '#fff7a8' : '#ffffff'
+  ctx.lineWidth = ripple.kind === 'catch' || ripple.kind === 'reward' ? 4 : 2
   ctx.beginPath()
   ctx.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2)
   ctx.stroke()
-  if (ripple.kind === 'catch') {
-    for (let i = 0; i < 7; i += 1) {
-      const angle = (Math.PI * 2 * i) / 7
+
+  if (ripple.kind === 'catch' || ripple.kind === 'reward') {
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (Math.PI * 2 * i) / 10
       ctx.beginPath()
       ctx.arc(
         ripple.x + Math.cos(angle) * radius * 0.72,
-        ripple.y + Math.sin(angle) * radius * 0.45,
-        4,
+        ripple.y + Math.sin(angle) * radius * 0.48,
+        4 + (1 - progress) * 4,
         0,
         Math.PI * 2,
       )
-      ctx.fillStyle = '#fff6a3'
+      ctx.fillStyle = i % 2 ? '#ffffff' : '#fff18a'
       ctx.fill()
     }
   }
+  ctx.restore()
+}
+
+function drawReward(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const progress = clamp01((now - round.phaseStartedAt) / 1.05)
+  const radius = easeOutCubic(progress) * 190
+
+  ctx.save()
+  const glow = ctx.createRadialGradient(
+    round.fishX,
+    round.fishY,
+    0,
+    round.fishX,
+    round.fishY,
+    radius,
+  )
+  glow.addColorStop(0, 'rgba(255, 255, 230, 0.72)')
+  glow.addColorStop(0.42, 'rgba(255, 226, 89, 0.38)')
+  glow.addColorStop(1, 'rgba(255, 226, 89, 0)')
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(round.fishX, round.fishY, radius, 0, Math.PI * 2)
+  ctx.fill()
+
+  for (let i = 0; i < 16; i += 1) {
+    const angle = (Math.PI * 2 * i) / 16 + progress * 1.6
+    const distance = 26 + radius * 0.58
+    ctx.globalAlpha = 1 - progress
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#ffef75'
+    ctx.beginPath()
+    ctx.arc(
+      round.fishX + Math.cos(angle) * distance,
+      round.fishY + Math.sin(angle) * distance,
+      5 + (1 - progress) * 5,
+      0,
+      Math.PI * 2,
+    )
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawMissOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, round: Round, now: number) {
+  const progress = clamp01((now - round.phaseStartedAt) / 0.42)
+  ctx.save()
+  ctx.globalAlpha = 0.62 * progress
+  ctx.fillStyle = '#03131f'
+  ctx.fillRect(0, 0, width, height)
   ctx.restore()
 }
 
@@ -250,8 +376,8 @@ export function GameCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationRef = useRef<number>(0)
-  const fishRef = useRef<Fish[]>([])
-  const rippleRef = useRef<Ripple[]>([])
+  const roundRef = useRef<Round | null>(null)
+  const rippleRef = useRef<SimpleRipple[]>([])
   const statsRef = useRef({
     startTime: performance.now(),
     touches: 0,
@@ -262,8 +388,6 @@ export function GameCanvas({
   })
   const nextIdRef = useRef(1)
   const stopHoldTimerRef = useRef<number | null>(null)
-  const quietUntilRef = useRef(0)
-  const interactionsSinceQuietRef = useRef(0)
   const stoppedRef = useRef(false)
   const sound = useMemo(() => new SoundManager(), [])
   const wakeLock = useMemo(() => new WakeLockController(), [])
@@ -292,13 +416,13 @@ export function GameCanvas({
       age: settings.age,
       touches: stats.touches,
       catches: stats.catches,
-      fishCount: settings.fishCount,
+      fishCount: 1 as const,
       averageReactionTime: stats.reactionTimes.length ? average : 0,
       favoriteFishType: favorite,
       personality: settings.personality,
       quietIntervals: stats.quietIntervals,
     }
-  }, [settings.age, settings.fishCount, settings.personality])
+  }, [settings.age, settings.personality])
 
   const stopSession = useCallback(() => {
     if (stoppedRef.current) {
@@ -329,29 +453,12 @@ export function GameCanvas({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) {
-      return
-    }
-
-    const rect = canvas.getBoundingClientRect()
+    const rect = canvas?.getBoundingClientRect()
+    const width = rect?.width || 1000
+    const height = rect?.height || 640
     const now = performance.now() / 1000
-    fishRef.current = Array.from({ length: settings.fishCount }, (_, index) => {
-      const size = settings.fishCount === 2 && index === 1
-        ? config.fishSize * 0.82
-        : config.fishSize
-      const speed = settings.fishCount === 2 && index === 1
-        ? config.fishSpeed * 0.74
-        : config.fishSpeed
-      return makeFish(
-        index + 1,
-        rect.width || 1000,
-        rect.height || 640,
-        size,
-        speed,
-        now,
-        settings.personality === 'lazy',
-      )
-    })
+
+    roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
     rippleRef.current = []
     statsRef.current = {
       startTime: performance.now(),
@@ -361,11 +468,8 @@ export function GameCanvas({
       fishTypes: new Map(),
       quietIntervals: 0,
     }
-    quietUntilRef.current = 0
-    interactionsSinceQuietRef.current = 0
     stoppedRef.current = false
-    nextIdRef.current = settings.fishCount + 1
-  }, [config, settings.fishCount, settings.personality])
+  }, [config])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -433,71 +537,38 @@ export function GameCanvas({
       const now = time / 1000
       previous = time
 
+      if (!roundRef.current) {
+        roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+      }
+
+      const round = roundRef.current
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       drawPond(ctx, width, height)
 
       if (!paused && !pageHidden) {
-        const isQuiet = isEndless && now < quietUntilRef.current
-        const speedMultiplier = isQuiet ? config.quietSlowMultiplier : 1
-
-        fishRef.current.forEach((fish) => {
-          if (fish.respawnAt > 0 && now >= fish.respawnAt) {
-            const nextFish = makeFish(
-              nextIdRef.current++,
-              width,
-              height,
-              fish.size,
-              Math.hypot(fish.vx, fish.vy) || config.fishSpeed,
-              now,
-              settings.personality === 'lazy',
-            )
-            Object.assign(fish, nextFish, { respawnAt: 0 })
+        if (round.phase === 'bubbling') {
+          if (now - round.phaseStartedAt >= round.bubbleDuration) {
+            round.phase = 'fish'
+            round.phaseStartedAt = now
+            round.bornAt = now
           }
+        } else if (round.phase === 'fish') {
+          const progress = clamp01((now - round.phaseStartedAt) / round.swimDuration)
+          const eased = easeOutCubic(progress)
+          round.fishX = lerp(round.spawnX, round.targetX, eased)
+          round.fishY = lerp(round.spawnY, round.targetY, eased)
 
-          if (now >= fish.pausedUntil) {
-            fish.x += fish.vx * dt * speedMultiplier
-            fish.y += fish.vy * dt * speedMultiplier
+          if (progress >= 1) {
+            round.phase = 'miss'
+            round.phaseStartedAt = now
+            round.missUntil = now + 1.05
+            statsRef.current.quietIntervals += 1
           }
-
-          if (fish.x < -80 || fish.x > width + 80) fish.vx *= -1
-          if (fish.y < height * 0.14 || fish.y > height * 0.86) fish.vy *= -1
-
-          if (now >= fish.nextDecisionAt) {
-            if (chance(isQuiet ? config.directionChangeFrequency * 0.25 : config.directionChangeFrequency)) {
-              const angle = rand(-0.85, 0.85) + (fish.vx > 0 ? 0 : Math.PI)
-              fish.vx = Math.cos(angle) * config.fishSpeed * rand(0.75, 1.25)
-              fish.vy = Math.sin(angle) * config.fishSpeed * rand(0.25, 0.75)
-            }
-            if (chance(isQuiet ? 0.38 : 0.18)) fish.pausedUntil = now + rand(0.35, isQuiet ? 3.2 : 1.2)
-            if (chance(isQuiet ? 0.45 : config.hidingFrequency)) fish.hideUntil = now + rand(0.8, isQuiet ? 4.5 : 2.4)
-            if (!isQuiet && chance(config.jumpFrequency)) fish.jumpUntil = now + rand(0.28, 0.5)
-            fish.nextDecisionAt = now + rand(isQuiet ? 2.5 : 0.7, isQuiet ? 6 : 2.4)
-          }
-
-          fish.hidden = now < fish.hideUntil || fish.respawnAt > 0
-          if (now >= fish.nextBubbleAt) {
-            if (chance(isQuiet ? 0.22 : 0.55)) {
-              rippleRef.current.push({
-                id: nextIdRef.current++,
-                x: fish.x - Math.sign(fish.vx) * fish.size * 0.8,
-                y: fish.y - fish.size * 0.25,
-                age: 0,
-                maxAge: rand(0.9, 1.7),
-                kind: 'bubble',
-              })
-            }
-            fish.nextBubbleAt = now + rand(isQuiet ? 12 : 5, isQuiet ? 24 : 12)
-          }
-        })
-
-        if (fishRef.current.length === 2) {
-          const [firstFish, secondFish] = fishRef.current
-          const distance = Math.hypot(firstFish.x - secondFish.x, firstFish.y - secondFish.y)
-          if (distance < firstFish.size + secondFish.size + 28) {
-            firstFish.vx *= -1
-            secondFish.vx *= -1
-            firstFish.pausedUntil = now + 0.35
-          }
+        } else if (round.phase === 'reward' && now >= round.rewardUntil) {
+          roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+        } else if (round.phase === 'miss' && now >= round.missUntil) {
+          roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
         }
 
         rippleRef.current = rippleRef.current
@@ -505,9 +576,27 @@ export function GameCanvas({
           .filter((ripple) => ripple.age < ripple.maxAge)
       }
 
+      const visibleRound = roundRef.current
       drawDecorations(ctx, width, height, decorations)
-      fishRef.current.forEach((fish) => drawFish(ctx, fish, now))
+
+      if (visibleRound.phase === 'bubbling') {
+        drawBubbleSpot(ctx, visibleRound, now)
+      }
+
+      if (visibleRound.phase === 'fish') {
+        drawBubbleSpot(ctx, visibleRound, now)
+        drawFish(ctx, visibleRound, now)
+      }
+
+      if (visibleRound.phase === 'reward') {
+        drawReward(ctx, visibleRound, now)
+      }
+
       rippleRef.current.forEach((ripple) => drawRipple(ctx, ripple))
+
+      if (visibleRound.phase === 'miss') {
+        drawMissOverlay(ctx, width, height, visibleRound, now)
+      }
 
       elapsedAccumulator += dt
       if (elapsedAccumulator > 0.4) {
@@ -528,18 +617,16 @@ export function GameCanvas({
   }, [
     config,
     decorations,
-    isEndless,
     pageHidden,
     paused,
     selectedDuration,
-    settings.fishCount,
-    settings.personality,
     stopSession,
   ])
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
-    if (!canvas || paused) {
+    const round = roundRef.current
+    if (!canvas || !round || paused) {
       return
     }
 
@@ -549,46 +636,39 @@ export function GameCanvas({
     const now = performance.now() / 1000
     statsRef.current.touches += 1
 
-    const target = fishRef.current
-      .filter((fish) => !fish.hidden)
-      .map((fish) => ({
-        fish,
-        distance: Math.hypot(fish.x - x, fish.y - y),
-      }))
-      .sort((a, b) => a.distance - b.distance)[0]
-
-    if (target && target.distance <= config.reactionDistance + target.fish.size * 0.65) {
-      const fish = target.fish
+    const distance = Math.hypot(round.fishX - x, round.fishY - y)
+    if (
+      round.phase === 'fish' &&
+      distance <= config.reactionDistance + round.fishSize * 0.72
+    ) {
       statsRef.current.catches += 1
-      statsRef.current.reactionTimes.push(now - fish.bornAt)
+      statsRef.current.reactionTimes.push(now - round.bornAt)
       statsRef.current.fishTypes.set(
-        fish.type,
-        (statsRef.current.fishTypes.get(fish.type) ?? 0) + 1,
+        round.fishType,
+        (statsRef.current.fishTypes.get(round.fishType) ?? 0) + 1,
       )
       sound.playSplash(config.soundIntensity)
-      interactionsSinceQuietRef.current += 1
-      if (
-        isEndless &&
-        interactionsSinceQuietRef.current >= config.quietAfterInteractions
-      ) {
-        quietUntilRef.current = now + rand(config.quietMinDuration, config.quietMaxDuration)
-        interactionsSinceQuietRef.current = 0
-        statsRef.current.quietIntervals += 1
-      }
-      fish.escapingUntil = now + 0.55
-      fish.vx = (fish.x < rect.width / 2 ? -1 : 1) * config.fishSpeed * 3.2
-      fish.vy = (fish.y < rect.height / 2 ? -1 : 1) * config.fishSpeed * 1.2
-      fish.hideUntil = now + rand(0.8, 1.8)
-      fish.respawnAt = fish.hideUntil
-      rippleRef.current.push({
-        id: nextIdRef.current++,
-        x,
-        y,
-        age: 0,
-        maxAge: 0.9,
-        kind: 'catch',
-      })
-
+      round.phase = 'reward'
+      round.phaseStartedAt = now
+      round.rewardUntil = now + 1.18
+      rippleRef.current.push(
+        {
+          id: nextIdRef.current++,
+          x: round.fishX,
+          y: round.fishY,
+          age: 0,
+          maxAge: 0.85,
+          kind: 'catch',
+        },
+        {
+          id: nextIdRef.current++,
+          x: round.fishX,
+          y: round.fishY,
+          age: 0,
+          maxAge: 1.25,
+          kind: 'reward',
+        },
+      )
       return
     }
 
@@ -597,8 +677,8 @@ export function GameCanvas({
       x,
       y,
       age: 0,
-      maxAge: 0.65,
-      kind: 'miss',
+      maxAge: round.phase === 'bubbling' ? 0.7 : 0.5,
+      kind: round.phase === 'bubbling' ? 'bubble' : 'tap',
     })
   }
 

@@ -2,7 +2,6 @@ import { copy, languageNames } from '../i18n'
 import type {
   CatAge,
   CatPersonality,
-  FishCount,
   Language,
   SessionDuration,
   SessionSettings,
@@ -18,7 +17,6 @@ type Props = {
 
 const ages: CatAge[] = ['kitten', 'adult', 'senior']
 const personalities: CatPersonality[] = ['calm', 'curious', 'hunter', 'lazy']
-const fishCounts: FishCount[] = [1, 2]
 const durations: SessionDuration[] = [3, 5, 'endless']
 
 export function ModeSelector({
@@ -85,24 +83,6 @@ export function ModeSelector({
               >
                 <strong>{t.personalities[personality].label}</strong>
                 <span>{t.personalities[personality].detail}</span>
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>{t.fishCount}</legend>
-          <div className="option-grid two">
-            {fishCounts.map((fishCount) => (
-              <button
-                className={settings.fishCount === fishCount ? 'selected' : ''}
-                key={fishCount}
-                type="button"
-                onClick={() => onChange({ ...settings, fishCount })}
-              >
-                <strong>{t.fishCounts[fishCount].label}</strong>
-                <span>{t.fishCounts[fishCount].detail}</span>
-                <em>{t.fishCounts[fishCount].badge}</em>
               </button>
             ))}
           </div>
