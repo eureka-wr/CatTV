@@ -20,6 +20,8 @@ type Props = {
   onLanguageChange: (language: Language) => void
   paused: boolean
   onPauseToggle: () => void
+  onPreviousGame: () => void
+  onNextGame: () => void
   onStop: (stats: SessionStats) => void
 }
 
@@ -741,6 +743,8 @@ export function GameCanvas({
   onLanguageChange: _onLanguageChange,
   paused,
   onPauseToggle,
+  onPreviousGame,
+  onNextGame,
   onStop,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -1089,6 +1093,11 @@ export function GameCanvas({
         onPointerDown={handlePointerDown}
       />
       <div className="game-controls" aria-label={t.ownerControls}>
+        <button className="icon-control" type="button" onClick={onPreviousGame} aria-label="previous game">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M15 24 31 12v24zM10 12h5v24h-5z" />
+          </svg>
+        </button>
         <button className="icon-control" type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
           {paused ? (
             <svg viewBox="0 0 48 48" aria-hidden="true">
@@ -1110,6 +1119,11 @@ export function GameCanvas({
         >
           <svg viewBox="0 0 48 48" aria-hidden="true">
             <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+          </svg>
+        </button>
+        <button className="icon-control" type="button" onClick={onNextGame} aria-label="next game">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M33 24 17 12v24zM33 12h5v24h-5z" />
           </svg>
         </button>
       </div>

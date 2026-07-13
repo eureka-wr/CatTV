@@ -360,7 +360,7 @@ legend {
 .game-controls {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
+  left: max(12px, env(safe-area-inset-left));
   display: flex;
   gap: 8px;
   align-items: center;
@@ -466,8 +466,7 @@ dd {
 
   .game-controls {
     left: max(10px, env(safe-area-inset-left));
-    right: max(10px, env(safe-area-inset-right));
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .game-controls button {

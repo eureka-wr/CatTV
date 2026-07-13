@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from './game/session'
 import './App.css'
 
 type Screen = 'lobby' | 'game'
+const gameOrder: GameId[] = ['fish', 'mouse', 'dragonfly']
 
 function App() {
   const [screen, setScreen] = useState<Screen>('lobby')
@@ -25,6 +26,16 @@ function App() {
     setScreen('lobby')
   }, [])
 
+  const switchGame = useCallback((direction: -1 | 1) => {
+    setPaused(false)
+    setSelectedGame((currentGame) => {
+      const currentIndex = Math.max(0, gameOrder.indexOf(currentGame ?? 'fish'))
+      const nextIndex =
+        (currentIndex + direction + gameOrder.length) % gameOrder.length
+      return gameOrder[nextIndex]
+    })
+  }, [])
+
   if (screen === 'game' && selectedGame) {
     return (
       <GameCanvas
@@ -34,6 +45,8 @@ function App() {
         onLanguageChange={setLanguage}
         paused={paused}
         onPauseToggle={() => setPaused((value) => !value)}
+        onPreviousGame={() => switchGame(-1)}
+        onNextGame={() => switchGame(1)}
         onStop={stopGame}
       />
     )
