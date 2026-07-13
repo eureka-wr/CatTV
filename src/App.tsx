@@ -14,9 +14,6 @@ function App() {
   const [selectedGame, setSelectedGame] = useState<GameId | null>(null)
 
   const startGame = (gameId: GameId) => {
-    if (gameId !== 'fish') {
-      return
-    }
     setPaused(false)
     setSelectedGame(gameId)
     setScreen('game')
@@ -28,9 +25,10 @@ function App() {
     setScreen('lobby')
   }, [])
 
-  if (screen === 'game' && selectedGame === 'fish') {
+  if (screen === 'game' && selectedGame) {
     return (
       <GameCanvas
+        gameId={selectedGame}
         settings={DEFAULT_SETTINGS}
         language={language}
         onLanguageChange={setLanguage}

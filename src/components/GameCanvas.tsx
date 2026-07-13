@@ -11,8 +11,10 @@ import {
 } from '../game/session'
 import { copy } from '../i18n'
 import type { DifficultyConfig, Language, SessionSettings, SessionStats } from '../game/types'
+import type { GameId } from './GameLobby'
 
 type Props = {
+  gameId: GameId
   settings: SessionSettings
   language: Language
   onLanguageChange: (language: Language) => void
@@ -28,7 +30,7 @@ type PondDecoration = {
   kind: 'plant' | 'rock' | 'lily'
 }
 
-type RoundPhase = 'bubbling' | 'fish' | 'reward' | 'miss'
+type RoundPhase = 'cue' | 'target' | 'reward' | 'miss'
 
 type Round = {
   id: number
@@ -44,6 +46,7 @@ type Round = {
   fishY: number
   fishSize: number
   fishType: string
+  gameId: GameId
   color: string
   accent: string
   bubbleDuration: number
@@ -69,6 +72,12 @@ const fishTypes = [
   { type: 'deep teal', color: '#57d8ca', accent: '#f7ff9b' },
 ]
 
+const targetStyles: Record<GameId, { type: string; color: string; accent: string }> = {
+  fish: fishTypes[0],
+  mouse: { type: 'field mouse', color: '#b9c7d0', accent: '#f7fbfd' },
+  dragonfly: { type: 'blue dragonfly', color: '#3ecfb5', accent: '#d6faff' },
+}
+
 const rand = (min: number, max: number) => min + Math.random() * (max - min)
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3)
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
@@ -84,19 +93,45 @@ function createDecorations(): PondDecoration[] {
   ]
 }
 
-function pickSpawn(width: number, height: number) {
+function pickSpawn(width: number, height: number, gameId: GameId) {
+  if (gameId === 'mouse') {
+    return {
+      x: rand(width * 0.24, width * 0.76),
+      y: rand(height * 0.62, height * 0.82),
+    }
+  }
+
+  if (gameId === 'dragonfly') {
+    return {
+      x: rand(width * 0.24, width * 0.76),
+      y: rand(height * 0.2, height * 0.62),
+    }
+  }
+
   return {
     x: rand(width * 0.28, width * 0.72),
     y: rand(height * 0.26, height * 0.74),
   }
 }
 
-function pickTarget(width: number, height: number, x: number, y: number) {
+function pickTarget(width: number, height: number, x: number, y: number, gameId: GameId) {
   const exits = [
-    { x: -80, y: rand(height * 0.2, height * 0.82), distance: x },
-    { x: width + 80, y: rand(height * 0.2, height * 0.82), distance: width - x },
+    {
+      x: -80,
+      y: gameId === 'mouse' ? rand(height * 0.64, height * 0.84) : rand(height * 0.2, height * 0.82),
+      distance: x,
+    },
+    {
+      x: width + 80,
+      y: gameId === 'mouse' ? rand(height * 0.64, height * 0.84) : rand(height * 0.2, height * 0.82),
+      distance: width - x,
+    },
     { x: rand(width * 0.16, width * 0.84), y: -70, distance: y },
-    { x: rand(width * 0.16, width * 0.84), y: height + 70, distance: height - y },
+    {
+      x: rand(width * 0.16, width * 0.84),
+      y: height + 70,
+      distance: gameId === 'dragonfly' ? height - y : (height - y) * 0.35,
+    },
   ]
 
   return exits.sort((a, b) => b.distance - a.distance)[0]
@@ -134,17 +169,22 @@ function createRound(
   height: number,
   config: DifficultyConfig,
   now: number,
+  gameId: GameId,
 ): Round {
-  const spawn = pickSpawn(width, height)
-  const target = pickTarget(width, height, spawn.x, spawn.y)
+  const spawn = pickSpawn(width, height, gameId)
+  const target = pickTarget(width, height, spawn.x, spawn.y, gameId)
   const control = createControlPoint(width, height, spawn.x, spawn.y, target.x, target.y)
-  const fishType = fishTypes[Math.floor(Math.random() * fishTypes.length)]
+  const fishType =
+    gameId === 'fish'
+      ? fishTypes[Math.floor(Math.random() * fishTypes.length)]
+      : targetStyles[gameId]
   const distance = Math.hypot(target.x - spawn.x, target.y - spawn.y)
-  const swimDuration = Math.max(3.4, Math.min(7.4, distance / (config.fishSpeed * 0.78)))
+  const pace = gameId === 'dragonfly' ? 0.66 : gameId === 'mouse' ? 0.7 : 0.78
+  const swimDuration = Math.max(3.4, Math.min(7.8, distance / (config.fishSpeed * pace)))
 
   return {
     id,
-    phase: 'bubbling',
+    phase: 'cue',
     phaseStartedAt: now,
     spawnX: spawn.x,
     spawnY: spawn.y,
@@ -156,6 +196,7 @@ function createRound(
     fishY: spawn.y,
     fishSize: config.fishSize * 1.34,
     fishType: fishType.type,
+    gameId,
     color: fishType.color,
     accent: fishType.accent,
     bubbleDuration: rand(1.45, 2.35),
@@ -188,6 +229,74 @@ function drawPond(ctx: CanvasRenderingContext2D, width: number, height: number) 
     ctx.stroke()
   }
   ctx.restore()
+}
+
+function drawMeadow(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#c8f4ff')
+  gradient.addColorStop(0.56, '#8ddc8f')
+  gradient.addColorStop(1, '#4f9c55')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.save()
+  ctx.globalAlpha = 0.32
+  ctx.fillStyle = '#fff6a8'
+  ctx.beginPath()
+  ctx.arc(width * 0.14, height * 0.16, 58, 0, Math.PI * 2)
+  ctx.fill()
+
+  for (let i = 0; i < 24; i += 1) {
+    const x = (i * 89) % width
+    const y = height * (0.62 + ((i * 17) % 34) / 100)
+    ctx.strokeStyle = i % 2 ? '#f1d85b' : '#2f7a45'
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.moveTo(x, height)
+    ctx.quadraticCurveTo(x + Math.sin(i) * 34, y, x + Math.cos(i) * 28, y - 48)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawDragonflyScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#d8fbff')
+  gradient.addColorStop(0.54, '#7adcf0')
+  gradient.addColorStop(1, '#2f9bb9')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.save()
+  ctx.globalAlpha = 0.22
+  for (let i = 0; i < 10; i += 1) {
+    const x = (i * 137) % width
+    const y = height * (0.18 + ((i * 29) % 48) / 100)
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#fff6a8'
+    ctx.beginPath()
+    ctx.ellipse(x, y, 72, 18, Math.sin(i) * 0.4, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawScene(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  gameId: GameId,
+) {
+  if (gameId === 'mouse') {
+    drawMeadow(ctx, width, height)
+    return
+  }
+
+  if (gameId === 'dragonfly') {
+    drawDragonflyScene(ctx, width, height)
+    return
+  }
+
+  drawPond(ctx, width, height)
 }
 
 function drawDecorations(
@@ -244,12 +353,61 @@ function drawDecorations(
   })
 }
 
-function drawBubbleSpot(
+function drawCue(
   ctx: CanvasRenderingContext2D,
   round: Round,
   now: number,
 ) {
   const age = now - round.phaseStartedAt
+
+  if (round.gameId === 'mouse') {
+    const pulse = (Math.sin(age * 5) + 1) / 2
+    ctx.save()
+    ctx.globalAlpha = 0.58
+    ctx.strokeStyle = '#fff4a7'
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.ellipse(round.spawnX, round.spawnY, 34 + pulse * 12, 15 + pulse * 4, 0, 0, Math.PI * 2)
+    ctx.stroke()
+    for (let i = -2; i <= 2; i += 1) {
+      ctx.strokeStyle = i % 2 ? '#f4de63' : '#246f42'
+      ctx.lineWidth = 6
+      ctx.beginPath()
+      ctx.moveTo(round.spawnX + i * 14, round.spawnY + 28)
+      ctx.quadraticCurveTo(
+        round.spawnX + i * 8 + Math.sin(age * 8 + i) * 12,
+        round.spawnY - 8,
+        round.spawnX + i * 18,
+        round.spawnY - 36 - pulse * 10,
+      )
+      ctx.stroke()
+    }
+    ctx.restore()
+    return
+  }
+
+  if (round.gameId === 'dragonfly') {
+    ctx.save()
+    for (let i = 0; i < 5; i += 1) {
+      const phase = (age * 0.78 + i * 0.2) % 1
+      const angle = i * 1.55 + age * 0.6
+      const radius = 10 + phase * 36
+      ctx.globalAlpha = (1 - phase) * 0.74
+      ctx.fillStyle = i % 2 ? '#ffffff' : '#fff17d'
+      ctx.beginPath()
+      ctx.arc(
+        round.spawnX + Math.cos(angle) * radius,
+        round.spawnY + Math.sin(angle) * radius * 0.74,
+        5 + (1 - phase) * 4,
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+    }
+    ctx.restore()
+    return
+  }
+
   const pulse = (Math.sin(age * 4.2) + 1) / 2
   const outer = 28 + pulse * 10
 
@@ -341,6 +499,160 @@ function drawFish(ctx: CanvasRenderingContext2D, round: Round, now: number) {
   ctx.restore()
 }
 
+function drawMouse(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(
+    round.targetY - round.controlY,
+    round.targetX - round.controlX,
+  )
+  const stride = Math.sin((now - round.bornAt) * 18) * round.fishSize * 0.07
+
+  ctx.save()
+  const glow = ctx.createRadialGradient(
+    round.fishX,
+    round.fishY,
+    round.fishSize * 0.1,
+    round.fishX,
+    round.fishY,
+    round.fishSize * 1.95,
+  )
+  glow.addColorStop(0, 'rgba(255, 245, 178, 0.48)')
+  glow.addColorStop(0.55, 'rgba(255, 230, 97, 0.18)')
+  glow.addColorStop(1, 'rgba(255, 230, 97, 0)')
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(round.fishX, round.fishY, round.fishSize * 1.95, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY + stride)
+  ctx.rotate(angle)
+
+  ctx.strokeStyle = '#fff8d1'
+  ctx.lineWidth = Math.max(4, round.fishSize * 0.1)
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize * 1.1, round.fishSize * 0.58, 0, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.strokeStyle = '#7f8e96'
+  ctx.lineWidth = Math.max(3, round.fishSize * 0.08)
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-round.fishSize * 0.9, round.fishSize * 0.08)
+  ctx.quadraticCurveTo(
+    -round.fishSize * 1.45,
+    -round.fishSize * 0.36,
+    -round.fishSize * 1.82,
+    round.fishSize * 0.2,
+  )
+  ctx.stroke()
+
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize, round.fishSize * 0.5, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = round.accent
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.52, -round.fishSize * 0.34, round.fishSize * 0.25, 0, Math.PI * 2)
+  ctx.arc(round.fishSize * 0.18, -round.fishSize * 0.38, round.fishSize * 0.2, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#7f8e96'
+  ctx.beginPath()
+  ctx.moveTo(round.fishSize * 0.72, -round.fishSize * 0.02)
+  ctx.lineTo(round.fishSize * 1.26, round.fishSize * 0.18)
+  ctx.lineTo(round.fishSize * 0.72, round.fishSize * 0.34)
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.43, -round.fishSize * 0.14, round.fishSize * 0.07, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawDragonfly(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(
+    round.targetY - round.controlY,
+    round.targetX - round.controlX,
+  )
+  const wingBeat = Math.sin((now - round.bornAt) * 28) * 0.22
+
+  ctx.save()
+  const glow = ctx.createRadialGradient(
+    round.fishX,
+    round.fishY,
+    round.fishSize * 0.1,
+    round.fishX,
+    round.fishY,
+    round.fishSize * 2.25,
+  )
+  glow.addColorStop(0, 'rgba(225, 255, 255, 0.62)')
+  glow.addColorStop(0.46, 'rgba(255, 241, 125, 0.24)')
+  glow.addColorStop(1, 'rgba(255, 241, 125, 0)')
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(round.fishX, round.fishY, round.fishSize * 2.25, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(angle + Math.sin(now * 8) * 0.12)
+
+  ctx.fillStyle = 'rgba(226, 252, 255, 0.72)'
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = Math.max(2, round.fishSize * 0.06)
+  ;[
+    [-0.1, -0.56 - wingBeat],
+    [0.15, 0.56 + wingBeat],
+  ].forEach(([xOffset, yOffset]) => {
+    ctx.beginPath()
+    ctx.ellipse(
+      round.fishSize * xOffset,
+      round.fishSize * yOffset,
+      round.fishSize * 0.82,
+      round.fishSize * 0.28,
+      yOffset < 0 ? -0.42 : 0.42,
+      0,
+      Math.PI * 2,
+    )
+    ctx.fill()
+    ctx.stroke()
+  })
+
+  ctx.fillStyle = round.color
+  ctx.strokeStyle = '#f7ffb8'
+  ctx.lineWidth = Math.max(3, round.fishSize * 0.08)
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize * 0.9, round.fishSize * 0.18, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.72, -round.fishSize * 0.08, round.fishSize * 0.08, 0, Math.PI * 2)
+  ctx.arc(round.fishSize * 0.72, round.fishSize * 0.08, round.fishSize * 0.08, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  if (round.gameId === 'mouse') {
+    drawMouse(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'dragonfly') {
+    drawDragonfly(ctx, round, now)
+    return
+  }
+
+  drawFish(ctx, round, now)
+}
+
 function drawRipple(ctx: CanvasRenderingContext2D, ripple: SimpleRipple) {
   const progress = ripple.age / ripple.maxAge
   const radius =
@@ -423,6 +735,7 @@ function drawMissOverlay(ctx: CanvasRenderingContext2D, width: number, height: n
 }
 
 export function GameCanvas({
+  gameId,
   settings,
   language,
   onLanguageChange: _onLanguageChange,
@@ -514,7 +827,7 @@ export function GameCanvas({
     const height = rect?.height || 640
     const now = performance.now() / 1000
 
-    roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+    roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
     rippleRef.current = []
     statsRef.current = {
       startTime: performance.now(),
@@ -525,7 +838,7 @@ export function GameCanvas({
       quietIntervals: 0,
     }
     stoppedRef.current = false
-  }, [config])
+  }, [config, gameId])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -594,22 +907,22 @@ export function GameCanvas({
       previous = time
 
       if (!roundRef.current) {
-        roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+        roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
       }
 
       const round = roundRef.current
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      drawPond(ctx, width, height)
+      drawScene(ctx, width, height, gameId)
 
       if (!paused && !pageHidden) {
-        if (round.phase === 'bubbling') {
+        if (round.phase === 'cue') {
           if (now - round.phaseStartedAt >= round.bubbleDuration) {
-            round.phase = 'fish'
+            round.phase = 'target'
             round.phaseStartedAt = now
             round.bornAt = now
           }
-        } else if (round.phase === 'fish') {
+        } else if (round.phase === 'target') {
           const progress = clamp01((now - round.phaseStartedAt) / round.swimDuration)
           const eased = easeOutCubic(progress)
           round.fishX = quadraticPoint(
@@ -632,9 +945,9 @@ export function GameCanvas({
             statsRef.current.quietIntervals += 1
           }
         } else if (round.phase === 'reward' && now >= round.rewardUntil) {
-          roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+          roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
         } else if (round.phase === 'miss' && now >= round.missUntil) {
-          roundRef.current = createRound(nextIdRef.current++, width, height, config, now)
+          roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
         }
 
         rippleRef.current = rippleRef.current
@@ -643,15 +956,17 @@ export function GameCanvas({
       }
 
       const visibleRound = roundRef.current
-      drawDecorations(ctx, width, height, decorations)
-
-      if (visibleRound.phase === 'bubbling') {
-        drawBubbleSpot(ctx, visibleRound, now)
+      if (gameId === 'fish') {
+        drawDecorations(ctx, width, height, decorations)
       }
 
-      if (visibleRound.phase === 'fish') {
-        drawBubbleSpot(ctx, visibleRound, now)
-        drawFish(ctx, visibleRound, now)
+      if (visibleRound.phase === 'cue') {
+        drawCue(ctx, visibleRound, now)
+      }
+
+      if (visibleRound.phase === 'target') {
+        drawCue(ctx, visibleRound, now)
+        drawTarget(ctx, visibleRound, now)
       }
 
       if (visibleRound.phase === 'reward') {
@@ -683,6 +998,7 @@ export function GameCanvas({
   }, [
     config,
     decorations,
+    gameId,
     pageHidden,
     paused,
     selectedDuration,
@@ -704,7 +1020,7 @@ export function GameCanvas({
 
     const distance = Math.hypot(round.fishX - x, round.fishY - y)
     if (
-      round.phase === 'fish' &&
+      round.phase === 'target' &&
       distance <= config.reactionDistance + round.fishSize * 0.82
     ) {
       statsRef.current.catches += 1
@@ -743,8 +1059,8 @@ export function GameCanvas({
       x,
       y,
       age: 0,
-      maxAge: round.phase === 'bubbling' ? 0.7 : 0.5,
-      kind: round.phase === 'bubbling' ? 'bubble' : 'tap',
+      maxAge: round.phase === 'cue' ? 0.7 : 0.5,
+      kind: round.phase === 'cue' ? 'bubble' : 'tap',
     })
   }
 

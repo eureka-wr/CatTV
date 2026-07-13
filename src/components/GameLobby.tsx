@@ -16,8 +16,8 @@ type GameTile = {
 
 const games: GameTile[] = [
   { id: 'fish', ready: true, className: 'fish-tile' },
-  { id: 'mouse', ready: false, className: 'mouse-tile' },
-  { id: 'dragonfly', ready: false, className: 'dragonfly-tile' },
+  { id: 'mouse', ready: true, className: 'mouse-tile' },
+  { id: 'dragonfly', ready: true, className: 'dragonfly-tile' },
 ]
 
 function FishIcon() {
@@ -44,7 +44,6 @@ function MouseIcon() {
       <circle className="mouse-ear" cx="112" cy="68" r="15" />
       <path className="mouse-nose" d="m133 97 22 11-22 10z" />
       <circle className="mouse-eye" cx="110" cy="91" r="4" />
-      <path className="placeholder-mark" d="M70 138h40" />
     </svg>
   )
 }
@@ -59,7 +58,6 @@ function DragonflyIcon() {
       <ellipse className="wing wing-right-bottom" cx="110" cy="104" rx="32" ry="16" />
       <path className="dragonfly-body" d="M90 42c10 18 10 74 0 100-10-26-10-82 0-100Z" />
       <circle className="dragonfly-head" cx="90" cy="39" r="12" />
-      <path className="placeholder-mark" d="M70 145h40" />
     </svg>
   )
 }
@@ -85,7 +83,6 @@ export function GameLobby({ language, onStart }: Props) {
         {games.map((game) => (
           <button
             aria-label={game.id}
-            aria-disabled={!game.ready}
             className={`game-tile ${game.className}`}
             key={game.id}
             type="button"
