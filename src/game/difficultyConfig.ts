@@ -2,7 +2,6 @@ import type { CatAge, CatPersonality, DifficultyConfig } from './types'
 
 const agePresets: Record<CatAge, DifficultyConfig> = {
   kitten: {
-    fishCount: 5,
     fishSpeed: 42,
     fishSize: 44,
     reactionDistance: 64,
@@ -10,9 +9,12 @@ const agePresets: Record<CatAge, DifficultyConfig> = {
     directionChangeFrequency: 0.34,
     jumpFrequency: 0.2,
     soundIntensity: 0.55,
+    quietAfterInteractions: 5,
+    quietMinDuration: 10,
+    quietMaxDuration: 18,
+    quietSlowMultiplier: 0.38,
   },
   adult: {
-    fishCount: 4,
     fishSpeed: 58,
     fishSize: 36,
     reactionDistance: 52,
@@ -20,9 +22,12 @@ const agePresets: Record<CatAge, DifficultyConfig> = {
     directionChangeFrequency: 0.44,
     jumpFrequency: 0.16,
     soundIntensity: 0.48,
+    quietAfterInteractions: 4,
+    quietMinDuration: 12,
+    quietMaxDuration: 24,
+    quietSlowMultiplier: 0.32,
   },
   senior: {
-    fishCount: 4,
     fishSpeed: 34,
     fishSize: 48,
     reactionDistance: 70,
@@ -30,6 +35,10 @@ const agePresets: Record<CatAge, DifficultyConfig> = {
     directionChangeFrequency: 0.24,
     jumpFrequency: 0.08,
     soundIntensity: 0.32,
+    quietAfterInteractions: 4,
+    quietMinDuration: 14,
+    quietMaxDuration: 28,
+    quietSlowMultiplier: 0.24,
   },
 }
 
@@ -43,6 +52,8 @@ const personalityAdjustments: Record<
     directionChangeFrequency: 0.78,
     jumpFrequency: 0.6,
     soundIntensity: 0.82,
+    quietAfterInteractions: 0.8,
+    quietMaxDuration: 1.15,
   },
   curious: {
     fishSpeed: 0.96,
@@ -50,6 +61,7 @@ const personalityAdjustments: Record<
     directionChangeFrequency: 1.05,
     jumpFrequency: 1.45,
     soundIntensity: 0.92,
+    quietAfterInteractions: 1,
   },
   hunter: {
     fishSpeed: 1.28,
@@ -59,6 +71,8 @@ const personalityAdjustments: Record<
     directionChangeFrequency: 1.38,
     jumpFrequency: 1.15,
     soundIntensity: 1,
+    quietAfterInteractions: 0.75,
+    quietSlowMultiplier: 0.9,
   },
   lazy: {
     fishSpeed: 0.74,
@@ -68,6 +82,8 @@ const personalityAdjustments: Record<
     directionChangeFrequency: 0.82,
     jumpFrequency: 0.7,
     soundIntensity: 0.78,
+    quietAfterInteractions: 0.8,
+    quietSlowMultiplier: 0.75,
   },
 }
 
@@ -82,7 +98,6 @@ export function getDifficultyConfig(
   const adjustment = personalityAdjustments[personality]
 
   return {
-    fishCount: adjustment.fishCount ?? base.fishCount,
     fishSpeed: clamp(base.fishSpeed * (adjustment.fishSpeed ?? 1), 24, 92),
     fishSize: clamp(base.fishSize * (adjustment.fishSize ?? 1), 28, 58),
     reactionDistance: clamp(
@@ -110,6 +125,29 @@ export function getDifficultyConfig(
       base.soundIntensity * (adjustment.soundIntensity ?? 1),
       0.18,
       0.72,
+    ),
+    quietAfterInteractions: Math.round(
+      clamp(
+        base.quietAfterInteractions *
+          (adjustment.quietAfterInteractions ?? 1),
+        2,
+        8,
+      ),
+    ),
+    quietMinDuration: clamp(
+      base.quietMinDuration * (adjustment.quietMinDuration ?? 1),
+      8,
+      20,
+    ),
+    quietMaxDuration: clamp(
+      base.quietMaxDuration * (adjustment.quietMaxDuration ?? 1),
+      12,
+      30,
+    ),
+    quietSlowMultiplier: clamp(
+      base.quietSlowMultiplier * (adjustment.quietSlowMultiplier ?? 1),
+      0.18,
+      0.55,
     ),
   }
 }

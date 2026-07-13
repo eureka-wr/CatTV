@@ -1,6 +1,7 @@
 import { copy } from '../i18n'
 import type { SessionSettings, SessionStats } from '../game/types'
 import type { Language } from '../game/types'
+import { getSuccessRate } from '../game/session'
 
 const fishTypeKeys = ['sunny gold', 'moon blue', 'white flash', 'deep teal'] as const
 type FishTypeKey = (typeof fishTypeKeys)[number]
@@ -32,6 +33,7 @@ export function SessionSummary({
   onSetup,
 }: Props) {
   const t = copy[language]
+  const successRate = Math.round(getSuccessRate(stats) * 100)
   const favoriteFish =
     stats.favoriteFishType === 'Not yet'
       ? t.notYet
@@ -65,7 +67,7 @@ export function SessionSummary({
 
       <dl className="summary-grid">
         <div>
-          <dt>{t.duration}</dt>
+          <dt>{t.sessionLength}</dt>
           <dd>{formatDuration(stats.duration)}</dd>
         </div>
         <div>
@@ -73,8 +75,28 @@ export function SessionSummary({
           <dd>{stats.touches}</dd>
         </div>
         <div>
-          <dt>{t.fishReactions}</dt>
+          <dt>{t.successfulTouches}</dt>
           <dd>{stats.catches}</dd>
+        </div>
+        <div>
+          <dt>{t.successRate}</dt>
+          <dd>{successRate}%</dd>
+        </div>
+        <div>
+          <dt>{t.fishCountUsed}</dt>
+          <dd>{t.fishCounts[stats.fishCount].label}</dd>
+        </div>
+        <div>
+          <dt>{t.ageMode}</dt>
+          <dd>{t.ages[stats.age].label}</dd>
+        </div>
+        <div>
+          <dt>{t.personalityMode}</dt>
+          <dd>{t.personalities[stats.personality].label}</dd>
+        </div>
+        <div>
+          <dt>{t.quietIntervals}</dt>
+          <dd>{stats.quietIntervals}</dd>
         </div>
         <div>
           <dt>{t.averageReaction}</dt>

@@ -1,5 +1,12 @@
 import { copy, languageNames } from '../i18n'
-import type { CatAge, CatPersonality, Language, SessionSettings, TimerOption } from '../game/types'
+import type {
+  CatAge,
+  CatPersonality,
+  FishCount,
+  Language,
+  SessionDuration,
+  SessionSettings,
+} from '../game/types'
 
 type Props = {
   settings: SessionSettings
@@ -11,7 +18,8 @@ type Props = {
 
 const ages: CatAge[] = ['kitten', 'adult', 'senior']
 const personalities: CatPersonality[] = ['calm', 'curious', 'hunter', 'lazy']
-const timers: TimerOption[] = [300, 600, 0]
+const fishCounts: FishCount[] = [1, 2]
+const durations: SessionDuration[] = [3, 5, 'endless']
 
 export function ModeSelector({
   settings,
@@ -83,20 +91,43 @@ export function ModeSelector({
         </fieldset>
 
         <fieldset>
-          <legend>{t.timer}</legend>
-          <div className="timer-row">
-            {timers.map((timer) => (
+          <legend>{t.fishCount}</legend>
+          <div className="option-grid two">
+            {fishCounts.map((fishCount) => (
               <button
-                className={settings.timer === timer ? 'selected' : ''}
-                key={timer}
+                className={settings.fishCount === fishCount ? 'selected' : ''}
+                key={fishCount}
                 type="button"
-                onClick={() => onChange({ ...settings, timer })}
+                onClick={() => onChange({ ...settings, fishCount })}
               >
-                {t.timers[timer]}
+                <strong>{t.fishCounts[fishCount].label}</strong>
+                <span>{t.fishCounts[fishCount].detail}</span>
+                <em>{t.fishCounts[fishCount].badge}</em>
               </button>
             ))}
           </div>
         </fieldset>
+
+        <fieldset>
+          <legend>{t.playTime}</legend>
+          <div className="timer-row">
+            {durations.map((duration) => (
+              <button
+                className={settings.duration === duration ? 'selected' : ''}
+                key={duration}
+                type="button"
+                onClick={() => onChange({ ...settings, duration })}
+              >
+                <strong>{t.durations[duration].label}</strong>
+                <span>{t.durations[duration].detail}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {settings.duration === 'endless' && (
+          <p className="endless-note">{t.endlessSetupNote}</p>
+        )}
 
         <button className="primary-action" type="button" onClick={onStart}>
           {t.startGame}

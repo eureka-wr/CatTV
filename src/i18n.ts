@@ -1,4 +1,10 @@
-import type { CatAge, CatPersonality, Language, TimerOption } from './game/types'
+import type {
+  CatAge,
+  CatPersonality,
+  FishCount,
+  Language,
+  SessionDuration,
+} from './game/types'
 
 export const languageNames: Record<Language, string> = {
   en: 'English',
@@ -14,8 +20,11 @@ export const copy = {
     language: 'Language',
     catAge: 'Cat age',
     catPersonality: 'Cat personality',
-    timer: 'Timer',
+    fishCount: 'Number of fish',
+    playTime: 'Play time',
     startGame: 'Start Game',
+    endlessSetupNote:
+      'Endless play continues until stopped. Keep the device in a secure position and check on your cat and device regularly.',
     ownerNote: 'Owner note',
     safety:
       'Use guided access or screen lock if available. Supervise play and stop if your cat seems frustrated or overstimulated.',
@@ -25,11 +34,17 @@ export const copy = {
     pause: 'Pause',
     resume: 'Resume',
     stop: 'Stop',
+    holdToStop: 'Hold to stop',
     timeRemaining: 'Time remaining',
     sessionComplete: 'Session complete',
-    duration: 'Duration',
+    sessionLength: 'Session length',
     touches: 'Touches',
-    fishReactions: 'Fish reactions',
+    successfulTouches: 'Successful fish touches',
+    successRate: 'Success rate',
+    fishCountUsed: 'Fish count',
+    ageMode: 'Cat age mode',
+    personalityMode: 'Cat personality mode',
+    quietIntervals: 'Quiet intervals',
     averageReaction: 'Average reaction',
     favoriteFish: 'Favorite fish',
     notYet: 'Not yet',
@@ -47,10 +62,14 @@ export const copy = {
       hunter: { label: 'Hunter', detail: 'Sharper turns and escapes' },
       lazy: { label: 'Lazy', detail: 'Slow fish near the middle' },
     },
-    timers: {
-      300: '5 min',
-      600: '10 min',
-      0: 'Endless',
+    fishCounts: {
+      1: { label: '1 fish', detail: 'Focused play', badge: 'Recommended' },
+      2: { label: '2 fish', detail: 'More variety', badge: 'Optional' },
+    },
+    durations: {
+      3: { label: '3 min', detail: 'Recommended' },
+      5: { label: '5 min', detail: 'Short supervised play' },
+      endless: { label: 'Endless', detail: 'For independent play' },
     },
     fishTypes: {
       'sunny gold': 'sunny gold',
@@ -66,8 +85,10 @@ export const copy = {
     language: '语言',
     catAge: '猫咪年龄',
     catPersonality: '猫咪性格',
-    timer: '时长',
+    fishCount: '鱼儿数量',
+    playTime: '游戏时长',
     startGame: '开始游戏',
+    endlessSetupNote: '不限时模式会持续到主人手动停止。请固定好设备，并定期查看猫咪和设备状态。',
     ownerNote: '主人提示',
     safety: '如设备支持，请开启引导式访问或屏幕锁定。请全程陪玩，若猫咪焦躁或过度兴奋，请停止游戏。',
     gameCanvas: '钓鱼池游戏画布',
@@ -76,11 +97,17 @@ export const copy = {
     pause: '暂停',
     resume: '继续',
     stop: '停止',
+    holdToStop: '长按停止',
     timeRemaining: '剩余时间',
     sessionComplete: '本次游戏结束',
-    duration: '时长',
+    sessionLength: '游戏时长',
     touches: '触碰次数',
-    fishReactions: '鱼儿反应',
+    successfulTouches: '成功触碰',
+    successRate: '触碰成功率',
+    fishCountUsed: '鱼儿数量',
+    ageMode: '年龄模式',
+    personalityMode: '性格模式',
+    quietIntervals: '安静间隔',
     averageReaction: '平均反应',
     favoriteFish: '最喜欢的鱼',
     notYet: '暂无',
@@ -98,10 +125,14 @@ export const copy = {
       hunter: { label: '猎手型', detail: '转向更快，逃脱更灵活' },
       lazy: { label: '懒懒型', detail: '大鱼慢游，更靠近屏幕中心' },
     },
-    timers: {
-      300: '5 分钟',
-      600: '10 分钟',
-      0: '不限时',
+    fishCounts: {
+      1: { label: '1 条鱼', detail: '专注玩法', badge: '推荐' },
+      2: { label: '2 条鱼', detail: '更多变化', badge: '可选' },
+    },
+    durations: {
+      3: { label: '3 分钟', detail: '推荐' },
+      5: { label: '5 分钟', detail: '短时陪玩' },
+      endless: { label: '不限时', detail: '适合独立玩耍' },
     },
     fishTypes: {
       'sunny gold': '阳光金鱼',
@@ -119,8 +150,10 @@ export const copy = {
     language: string
     catAge: string
     catPersonality: string
-    timer: string
+    fishCount: string
+    playTime: string
     startGame: string
+    endlessSetupNote: string
     ownerNote: string
     safety: string
     gameCanvas: string
@@ -129,11 +162,17 @@ export const copy = {
     pause: string
     resume: string
     stop: string
+    holdToStop: string
     timeRemaining: string
     sessionComplete: string
-    duration: string
+    sessionLength: string
     touches: string
-    fishReactions: string
+    successfulTouches: string
+    successRate: string
+    fishCountUsed: string
+    ageMode: string
+    personalityMode: string
+    quietIntervals: string
     averageReaction: string
     favoriteFish: string
     notYet: string
@@ -142,7 +181,8 @@ export const copy = {
     changeSetup: string
     ages: Record<CatAge, { label: string; detail: string }>
     personalities: Record<CatPersonality, { label: string; detail: string }>
-    timers: Record<TimerOption, string>
+    fishCounts: Record<FishCount, { label: string; detail: string; badge: string }>
+    durations: Record<SessionDuration, { label: string; detail: string }>
     fishTypes: Record<'sunny gold' | 'moon blue' | 'white flash' | 'deep teal', string>
   }
 >

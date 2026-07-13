@@ -101,6 +101,10 @@ legend {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.option-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .option-grid button,
 .timer-row button,
 .secondary-action {
@@ -131,6 +135,15 @@ legend {
   line-height: 1.25;
 }
 
+.option-grid button em {
+  display: inline-block;
+  margin-top: 8px;
+  color: #0a6187;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .option-grid button:hover,
 .timer-row button:hover,
 .secondary-action:hover {
@@ -153,6 +166,28 @@ legend {
   min-height: 48px;
   text-align: center;
   font-weight: 800;
+}
+
+.timer-row button strong,
+.timer-row button span {
+  display: block;
+}
+
+.timer-row button span {
+  margin-top: 3px;
+  color: #246176;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.endless-note {
+  max-width: 760px;
+  margin: -6px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(255, 247, 186, 0.72);
+  color: #164a61;
+  font-size: 0.95rem;
 }
 
 .primary-action {
@@ -288,6 +323,7 @@ dd {
 
   .option-grid.three,
   .option-grid.four,
+  .option-grid.two,
   .summary-grid {
     grid-template-columns: 1fr;
   }

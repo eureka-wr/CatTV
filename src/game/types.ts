@@ -1,10 +1,10 @@
 export type CatAge = 'kitten' | 'adult' | 'senior'
 export type CatPersonality = 'calm' | 'curious' | 'hunter' | 'lazy'
+export type FishCount = 1 | 2
 export type Language = 'en' | 'zh'
-export type TimerOption = 300 | 600 | 0
+export type SessionDuration = 3 | 5 | 'endless'
 
 export type DifficultyConfig = {
-  fishCount: number
   fishSpeed: number
   fishSize: number
   reactionDistance: number
@@ -12,20 +12,29 @@ export type DifficultyConfig = {
   directionChangeFrequency: number
   jumpFrequency: number
   soundIntensity: number
+  quietAfterInteractions: number
+  quietMinDuration: number
+  quietMaxDuration: number
+  quietSlowMultiplier: number
 }
 
 export type SessionSettings = {
   age: CatAge
+  duration: SessionDuration
+  fishCount: FishCount
   personality: CatPersonality
-  timer: TimerOption
 }
 
 export type SessionStats = {
-  duration: number
-  touches: number
+  age: CatAge
   catches: number
+  duration: number
+  fishCount: FishCount
   averageReactionTime: number
   favoriteFishType: string
+  personality: CatPersonality
+  quietIntervals: number
+  touches: number
 }
 
 export type Fish = {
@@ -45,6 +54,7 @@ export type Fish = {
   bornAt: number
   nextDecisionAt: number
   nextBubbleAt: number
+  respawnAt: number
   escapingUntil: number
 }
 

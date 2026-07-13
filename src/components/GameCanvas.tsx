@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getDifficultyConfig } from '../game/difficultyConfig'
 import { SoundManager } from '../game/SoundManager'
+import {
+  durationToSeconds,
+  ENDLESS_STATS_KEY,
+  isEndlessDuration,
+  serializeSessionStats,
+  WakeLockController,
+} from '../game/session'
 import { copy, languageNames } from '../i18n'
 import type {
   Fish,
@@ -64,7 +71,8 @@ function makeFish(
     jumpUntil: 0,
     bornAt: now,
     nextDecisionAt: now + rand(0.5, 2.2),
-    nextBubbleAt: now + rand(0.8, 4),
+    nextBubbleAt: now + rand(3, 8),
+    respawnAt: 0,
     escapingUntil: 0,
   }
 }
@@ -250,18 +258,27 @@ export function GameCanvas({
     catches: 0,
     reactionTimes: [] as number[],
     fishTypes: new Map<string, number>(),
+    quietIntervals: 0,
   })
   const nextIdRef = useRef(1)
+  const stopHoldTimerRef = useRef<number | null>(null)
+  const quietUntilRef = useRef(0)
+  const interactionsSinceQuietRef = useRef(0)
+  const stoppedRef = useRef(false)
   const sound = useMemo(() => new SoundManager(), [])
+  const wakeLock = useMemo(() => new WakeLockController(), [])
   const config = useMemo(
     () => getDifficultyConfig(settings.age, settings.personality),
     [settings.age, settings.personality],
   )
   const decorations = useMemo(createDecorations, [])
   const [elapsed, setElapsed] = useState(0)
+  const [pageHidden, setPageHidden] = useState(document.hidden)
   const t = copy[language]
+  const selectedDuration = durationToSeconds(settings.duration)
+  const isEndless = isEndlessDuration(settings.duration)
 
-  const buildStats = () => {
+  const buildStats = useCallback(() => {
     const stats = statsRef.current
     const favorite =
       Array.from(stats.fishTypes.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
@@ -272,12 +289,26 @@ export function GameCanvas({
 
     return {
       duration: (performance.now() - stats.startTime) / 1000,
+      age: settings.age,
       touches: stats.touches,
       catches: stats.catches,
+      fishCount: settings.fishCount,
       averageReactionTime: stats.reactionTimes.length ? average : 0,
       favoriteFishType: favorite,
+      personality: settings.personality,
+      quietIntervals: stats.quietIntervals,
     }
-  }
+  }, [settings.age, settings.fishCount, settings.personality])
+
+  const stopSession = useCallback(() => {
+    if (stoppedRef.current) {
+      return
+    }
+    stoppedRef.current = true
+    sound.fadeOut()
+    void wakeLock.release()
+    onStop(buildStats())
+  }, [buildStats, onStop, sound, wakeLock])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -304,17 +335,23 @@ export function GameCanvas({
 
     const rect = canvas.getBoundingClientRect()
     const now = performance.now() / 1000
-    fishRef.current = Array.from({ length: config.fishCount }, (_, index) =>
-      makeFish(
+    fishRef.current = Array.from({ length: settings.fishCount }, (_, index) => {
+      const size = settings.fishCount === 2 && index === 1
+        ? config.fishSize * 0.82
+        : config.fishSize
+      const speed = settings.fishCount === 2 && index === 1
+        ? config.fishSpeed * 0.74
+        : config.fishSpeed
+      return makeFish(
         index + 1,
         rect.width || 1000,
         rect.height || 640,
-        config.fishSize,
-        config.fishSpeed,
+        size,
+        speed,
         now,
         settings.personality === 'lazy',
-      ),
-    )
+      )
+    })
     rippleRef.current = []
     statsRef.current = {
       startTime: performance.now(),
@@ -322,9 +359,61 @@ export function GameCanvas({
       catches: 0,
       reactionTimes: [],
       fishTypes: new Map(),
+      quietIntervals: 0,
     }
-    nextIdRef.current = config.fishCount + 1
-  }, [config, settings.personality])
+    quietUntilRef.current = 0
+    interactionsSinceQuietRef.current = 0
+    stoppedRef.current = false
+    nextIdRef.current = settings.fishCount + 1
+  }, [config, settings.fishCount, settings.personality])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setPageHidden(document.hidden)
+      if (document.hidden) {
+        sound.fadeOut()
+        void wakeLock.release()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [sound, wakeLock])
+
+  useEffect(() => {
+    if (!isEndless || paused || pageHidden) {
+      void wakeLock.release()
+      return
+    }
+
+    void wakeLock.request()
+    return () => {
+      void wakeLock.release()
+    }
+  }, [isEndless, pageHidden, paused, wakeLock])
+
+  useEffect(() => {
+    if (!isEndless || paused) {
+      return
+    }
+
+    const persistStats = () => {
+      localStorage.setItem(ENDLESS_STATS_KEY, serializeSessionStats(buildStats()))
+    }
+
+    persistStats()
+    const interval = window.setInterval(persistStats, 15_000)
+    return () => window.clearInterval(interval)
+  }, [buildStats, isEndless, paused, settings])
+
+  useEffect(() => () => {
+    if (stopHoldTimerRef.current !== null) {
+      window.clearTimeout(stopHoldTimerRef.current)
+    }
+    sound.fadeOut()
+    void wakeLock.release()
+  }, [sound, wakeLock])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -347,41 +436,69 @@ export function GameCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       drawPond(ctx, width, height)
 
-      if (!paused) {
+      if (!paused && !pageHidden) {
+        const isQuiet = isEndless && now < quietUntilRef.current
+        const speedMultiplier = isQuiet ? config.quietSlowMultiplier : 1
+
         fishRef.current.forEach((fish) => {
+          if (fish.respawnAt > 0 && now >= fish.respawnAt) {
+            const nextFish = makeFish(
+              nextIdRef.current++,
+              width,
+              height,
+              fish.size,
+              Math.hypot(fish.vx, fish.vy) || config.fishSpeed,
+              now,
+              settings.personality === 'lazy',
+            )
+            Object.assign(fish, nextFish, { respawnAt: 0 })
+          }
+
           if (now >= fish.pausedUntil) {
-            fish.x += fish.vx * dt
-            fish.y += fish.vy * dt
+            fish.x += fish.vx * dt * speedMultiplier
+            fish.y += fish.vy * dt * speedMultiplier
           }
 
           if (fish.x < -80 || fish.x > width + 80) fish.vx *= -1
           if (fish.y < height * 0.14 || fish.y > height * 0.86) fish.vy *= -1
 
           if (now >= fish.nextDecisionAt) {
-            if (chance(config.directionChangeFrequency)) {
+            if (chance(isQuiet ? config.directionChangeFrequency * 0.25 : config.directionChangeFrequency)) {
               const angle = rand(-0.85, 0.85) + (fish.vx > 0 ? 0 : Math.PI)
               fish.vx = Math.cos(angle) * config.fishSpeed * rand(0.75, 1.25)
               fish.vy = Math.sin(angle) * config.fishSpeed * rand(0.25, 0.75)
             }
-            if (chance(0.18)) fish.pausedUntil = now + rand(0.35, 1.2)
-            if (chance(config.hidingFrequency)) fish.hideUntil = now + rand(0.8, 2.4)
-            if (chance(config.jumpFrequency)) fish.jumpUntil = now + rand(0.28, 0.5)
-            fish.nextDecisionAt = now + rand(0.7, 2.4)
+            if (chance(isQuiet ? 0.38 : 0.18)) fish.pausedUntil = now + rand(0.35, isQuiet ? 3.2 : 1.2)
+            if (chance(isQuiet ? 0.45 : config.hidingFrequency)) fish.hideUntil = now + rand(0.8, isQuiet ? 4.5 : 2.4)
+            if (!isQuiet && chance(config.jumpFrequency)) fish.jumpUntil = now + rand(0.28, 0.5)
+            fish.nextDecisionAt = now + rand(isQuiet ? 2.5 : 0.7, isQuiet ? 6 : 2.4)
           }
 
-          fish.hidden = now < fish.hideUntil
+          fish.hidden = now < fish.hideUntil || fish.respawnAt > 0
           if (now >= fish.nextBubbleAt) {
-            rippleRef.current.push({
-              id: nextIdRef.current++,
-              x: fish.x - Math.sign(fish.vx) * fish.size * 0.8,
-              y: fish.y - fish.size * 0.25,
-              age: 0,
-              maxAge: rand(0.9, 1.7),
-              kind: 'bubble',
-            })
-            fish.nextBubbleAt = now + rand(1.2, 4.8)
+            if (chance(isQuiet ? 0.22 : 0.55)) {
+              rippleRef.current.push({
+                id: nextIdRef.current++,
+                x: fish.x - Math.sign(fish.vx) * fish.size * 0.8,
+                y: fish.y - fish.size * 0.25,
+                age: 0,
+                maxAge: rand(0.9, 1.7),
+                kind: 'bubble',
+              })
+            }
+            fish.nextBubbleAt = now + rand(isQuiet ? 12 : 5, isQuiet ? 24 : 12)
           }
         })
+
+        if (fishRef.current.length === 2) {
+          const [firstFish, secondFish] = fishRef.current
+          const distance = Math.hypot(firstFish.x - secondFish.x, firstFish.y - secondFish.y)
+          if (distance < firstFish.size + secondFish.size + 28) {
+            firstFish.vx *= -1
+            secondFish.vx *= -1
+            firstFish.pausedUntil = now + 0.35
+          }
+        }
 
         rippleRef.current = rippleRef.current
           .map((ripple) => ({ ...ripple, age: ripple.age + dt }))
@@ -396,8 +513,8 @@ export function GameCanvas({
       if (elapsedAccumulator > 0.4) {
         const seconds = (performance.now() - statsRef.current.startTime) / 1000
         setElapsed(seconds)
-        if (settings.timer > 0 && seconds >= settings.timer) {
-          onStop(buildStats())
+        if (selectedDuration !== null && seconds >= selectedDuration) {
+          stopSession()
           return
         }
         elapsedAccumulator = 0
@@ -408,7 +525,17 @@ export function GameCanvas({
 
     animationRef.current = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(animationRef.current)
-  }, [config, decorations, onStop, paused, settings.timer])
+  }, [
+    config,
+    decorations,
+    isEndless,
+    pageHidden,
+    paused,
+    selectedDuration,
+    settings.fishCount,
+    settings.personality,
+    stopSession,
+  ])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -439,9 +566,20 @@ export function GameCanvas({
         (statsRef.current.fishTypes.get(fish.type) ?? 0) + 1,
       )
       sound.playSplash(config.soundIntensity)
+      interactionsSinceQuietRef.current += 1
+      if (
+        isEndless &&
+        interactionsSinceQuietRef.current >= config.quietAfterInteractions
+      ) {
+        quietUntilRef.current = now + rand(config.quietMinDuration, config.quietMaxDuration)
+        interactionsSinceQuietRef.current = 0
+        statsRef.current.quietIntervals += 1
+      }
       fish.escapingUntil = now + 0.55
       fish.vx = (fish.x < rect.width / 2 ? -1 : 1) * config.fishSpeed * 3.2
       fish.vy = (fish.y < rect.height / 2 ? -1 : 1) * config.fishSpeed * 1.2
+      fish.hideUntil = now + rand(0.8, 1.8)
+      fish.respawnAt = fish.hideUntil
       rippleRef.current.push({
         id: nextIdRef.current++,
         x,
@@ -451,20 +589,6 @@ export function GameCanvas({
         kind: 'catch',
       })
 
-      window.setTimeout(() => {
-        const index = fishRef.current.findIndex((item) => item.id === fish.id)
-        if (index >= 0) {
-          fishRef.current[index] = makeFish(
-            nextIdRef.current++,
-            rect.width,
-            rect.height,
-            config.fishSize,
-            config.fishSpeed,
-            performance.now() / 1000,
-            settings.personality === 'lazy',
-          )
-        }
-      }, 650)
       return
     }
 
@@ -479,7 +603,23 @@ export function GameCanvas({
   }
 
   const remaining =
-    settings.timer > 0 ? Math.max(0, Math.ceil(settings.timer - elapsed)) : null
+    selectedDuration !== null ? Math.max(0, Math.ceil(selectedDuration - elapsed)) : null
+
+  const handleStopPointerDown = () => {
+    if (!isEndless) {
+      stopSession()
+      return
+    }
+
+    stopHoldTimerRef.current = window.setTimeout(stopSession, 900)
+  }
+
+  const clearStopHold = () => {
+    if (stopHoldTimerRef.current !== null) {
+      window.clearTimeout(stopHoldTimerRef.current)
+      stopHoldTimerRef.current = null
+    }
+  }
 
   return (
     <main className="game-screen" lang={language === 'zh' ? 'zh-Hans' : 'en'}>
@@ -505,8 +645,14 @@ export function GameCanvas({
         <button type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
           {paused ? t.resume : t.pause}
         </button>
-        <button type="button" onClick={() => onStop(buildStats())}>
-          {t.stop}
+        <button
+          className={isEndless ? 'hold-stop' : ''}
+          type="button"
+          onPointerDown={handleStopPointerDown}
+          onPointerLeave={clearStopHold}
+          onPointerUp={clearStopHold}
+        >
+          {isEndless ? t.holdToStop : t.stop}
         </button>
         {remaining !== null && (
           <span aria-label={t.timeRemaining}>
