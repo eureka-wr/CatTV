@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react'
 import { GameCanvas } from './components/GameCanvas'
-import { GameLobby, type GameId } from './components/GameLobby'
+import { GameLobby } from './components/GameLobby'
+import { gameIds, type GameId } from './game/games'
 import type { Language, SessionStats } from './game/types'
 import { DEFAULT_SETTINGS } from './game/session'
 import './App.css'
 
 type Screen = 'lobby' | 'game'
-const gameOrder: GameId[] = ['fish', 'mouse', 'dragonfly']
 
 function App() {
   const [screen, setScreen] = useState<Screen>('lobby')
@@ -29,10 +29,10 @@ function App() {
   const switchGame = useCallback((direction: -1 | 1) => {
     setPaused(false)
     setSelectedGame((currentGame) => {
-      const currentIndex = Math.max(0, gameOrder.indexOf(currentGame ?? 'fish'))
+      const currentIndex = Math.max(0, gameIds.indexOf(currentGame ?? 'fish'))
       const nextIndex =
-        (currentIndex + direction + gameOrder.length) % gameOrder.length
-      return gameOrder[nextIndex]
+        (currentIndex + direction + gameIds.length) % gameIds.length
+      return gameIds[nextIndex]
     })
   }, [])
 

@@ -10,9 +10,9 @@
 }
 
 .game-grid {
-  width: min(100%, 980px);
+  width: min(100%, 1120px);
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: clamp(16px, 4vw, 34px);
   align-items: center;
 }
@@ -121,6 +121,116 @@
   stroke: #f7ffb8;
   stroke-width: 5;
   stroke-linejoin: round;
+}
+
+.butterfly-wing {
+  fill: rgba(255, 155, 209, 0.76);
+  stroke: #fff8b6;
+  stroke-width: 5;
+}
+
+.butterfly-wing.small {
+  fill: rgba(255, 227, 111, 0.78);
+}
+
+.butterfly-wing.left {
+  transform: rotate(-12deg);
+  transform-origin: 90px 90px;
+}
+
+.butterfly-wing.right {
+  transform: rotate(12deg);
+  transform-origin: 90px 90px;
+}
+
+.butterfly-body,
+.bird-body,
+.bird-wing,
+.cricket-body,
+.frog-body,
+.gecko-body,
+.gecko-head,
+.beetle-shell,
+.snake-head,
+.squirrel-body,
+.squirrel-head {
+  stroke: #fff8b6;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.butterfly-body {
+  fill: #7d5ab6;
+}
+
+.bird-body,
+.bird-wing {
+  fill: #79c9ff;
+}
+
+.bird-beak {
+  fill: #fff06a;
+}
+
+.cricket-body,
+.frog-body,
+.frog-eye {
+  fill: #72d25d;
+}
+
+.cricket-leg,
+.gecko-leg,
+.beetle-line {
+  fill: none;
+  stroke: #fff8b6;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gecko-body,
+.gecko-head {
+  fill: #8fd6a6;
+}
+
+.gecko-tail {
+  fill: none;
+  stroke: #8fd6a6;
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+
+.beetle-shell {
+  fill: #4f8c56;
+}
+
+.snake-body {
+  fill: none;
+  stroke: #77b35a;
+  stroke-width: 21;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.snake-head {
+  fill: #77b35a;
+}
+
+.squirrel-tail {
+  fill: none;
+  stroke: #c98a4f;
+  stroke-width: 15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.squirrel-body,
+.squirrel-head {
+  fill: #c98a4f;
+}
+
+.firefly-glow {
+  fill: rgba(215, 255, 85, 0.66);
 }
 
 .setup-screen,

@@ -11,7 +11,7 @@ import {
 } from '../game/session'
 import { copy } from '../i18n'
 import type { DifficultyConfig, Language, SessionSettings, SessionStats } from '../game/types'
-import type { GameId } from './GameLobby'
+import type { GameId } from '../game/games'
 
 type Props = {
   gameId: GameId
@@ -78,7 +78,41 @@ const targetStyles: Record<GameId, { type: string; color: string; accent: string
   fish: fishTypes[0],
   mouse: { type: 'field mouse', color: '#b9c7d0', accent: '#f7fbfd' },
   dragonfly: { type: 'blue dragonfly', color: '#3ecfb5', accent: '#d6faff' },
+  butterfly: { type: 'painted butterfly', color: '#ff9bd1', accent: '#ffe36f' },
+  bird: { type: 'small bird', color: '#79c9ff', accent: '#fff6a8' },
+  cricket: { type: 'green cricket', color: '#72d25d', accent: '#fff0a5' },
+  frog: { type: 'pond frog', color: '#72c85c', accent: '#eaff8f' },
+  gecko: { type: 'wall gecko', color: '#8fd6a6', accent: '#fff2a6' },
+  beetle: { type: 'leaf beetle', color: '#4f8c56', accent: '#f2d15f' },
+  snake: { type: 'grass snake', color: '#77b35a', accent: '#fff0a5' },
+  squirrel: { type: 'tree squirrel', color: '#c98a4f', accent: '#ffe7a7' },
+  firefly: { type: 'firefly', color: '#d7ff55', accent: '#ffffff' },
 }
+
+type GameProfile = {
+  scene: 'pond' | 'meadow' | 'air' | 'flowers' | 'branch' | 'night' | 'wall' | 'leaves' | 'sand'
+  movement: 'swim' | 'run' | 'flutter' | 'dash' | 'hop' | 'crawl' | 'skitter' | 'slither' | 'blink'
+  pace: number
+  size: number
+  cueDuration: [number, number]
+}
+
+const gameProfiles: Record<GameId, GameProfile> = {
+  fish: { scene: 'pond', movement: 'swim', pace: 0.78, size: 1.34, cueDuration: [1.45, 2.35] },
+  mouse: { scene: 'meadow', movement: 'run', pace: 0.7, size: 1.34, cueDuration: [1.35, 2.15] },
+  dragonfly: { scene: 'air', movement: 'flutter', pace: 0.66, size: 1.12, cueDuration: [1.25, 2.05] },
+  butterfly: { scene: 'flowers', movement: 'flutter', pace: 0.64, size: 1.22, cueDuration: [1.25, 2] },
+  bird: { scene: 'branch', movement: 'dash', pace: 0.6, size: 1.18, cueDuration: [1.15, 1.9] },
+  cricket: { scene: 'meadow', movement: 'hop', pace: 0.56, size: 1.08, cueDuration: [1.05, 1.85] },
+  frog: { scene: 'pond', movement: 'hop', pace: 0.54, size: 1.18, cueDuration: [1.05, 1.75] },
+  gecko: { scene: 'wall', movement: 'crawl', pace: 0.5, size: 1.02, cueDuration: [0.95, 1.7] },
+  beetle: { scene: 'leaves', movement: 'skitter', pace: 0.48, size: 0.96, cueDuration: [0.9, 1.6] },
+  snake: { scene: 'sand', movement: 'slither', pace: 0.44, size: 1.05, cueDuration: [0.85, 1.5] },
+  squirrel: { scene: 'branch', movement: 'dash', pace: 0.42, size: 1.04, cueDuration: [0.8, 1.45] },
+  firefly: { scene: 'night', movement: 'blink', pace: 0.4, size: 0.86, cueDuration: [0.75, 1.35] },
+}
+
+const getProfile = (gameId: GameId) => gameProfiles[gameId]
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min)
 const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3)
@@ -96,17 +130,33 @@ function createDecorations(): PondDecoration[] {
 }
 
 function pickSpawn(width: number, height: number, gameId: GameId) {
-  if (gameId === 'mouse') {
+  const profile = getProfile(gameId)
+
+  if (profile.scene === 'meadow' || profile.scene === 'leaves' || profile.scene === 'sand') {
     return {
       x: rand(width * 0.24, width * 0.76),
       y: rand(height * 0.62, height * 0.82),
     }
   }
 
-  if (gameId === 'dragonfly') {
+  if (profile.scene === 'air' || profile.scene === 'flowers' || profile.scene === 'night') {
     return {
       x: rand(width * 0.24, width * 0.76),
       y: rand(height * 0.2, height * 0.62),
+    }
+  }
+
+  if (profile.scene === 'branch') {
+    return {
+      x: rand(width * 0.18, width * 0.82),
+      y: rand(height * 0.2, height * 0.52),
+    }
+  }
+
+  if (profile.scene === 'wall') {
+    return {
+      x: rand(width * 0.18, width * 0.82),
+      y: rand(height * 0.22, height * 0.78),
     }
   }
 
@@ -117,22 +167,25 @@ function pickSpawn(width: number, height: number, gameId: GameId) {
 }
 
 function pickTarget(width: number, height: number, x: number, y: number, gameId: GameId) {
+  const profile = getProfile(gameId)
+  const groundY = profile.scene === 'meadow' || profile.scene === 'leaves' || profile.scene === 'sand'
+  const upperY = profile.scene === 'air' || profile.scene === 'flowers' || profile.scene === 'branch' || profile.scene === 'night'
   const exits = [
     {
       x: -80,
-      y: gameId === 'mouse' ? rand(height * 0.64, height * 0.84) : rand(height * 0.2, height * 0.82),
+      y: groundY ? rand(height * 0.64, height * 0.84) : upperY ? rand(height * 0.16, height * 0.62) : rand(height * 0.2, height * 0.82),
       distance: x,
     },
     {
       x: width + 80,
-      y: gameId === 'mouse' ? rand(height * 0.64, height * 0.84) : rand(height * 0.2, height * 0.82),
+      y: groundY ? rand(height * 0.64, height * 0.84) : upperY ? rand(height * 0.16, height * 0.62) : rand(height * 0.2, height * 0.82),
       distance: width - x,
     },
-    { x: rand(width * 0.16, width * 0.84), y: -70, distance: y },
+    { x: rand(width * 0.16, width * 0.84), y: -70, distance: upperY ? y : y * 0.5 },
     {
       x: rand(width * 0.16, width * 0.84),
       y: height + 70,
-      distance: gameId === 'dragonfly' ? height - y : (height - y) * 0.35,
+      distance: upperY ? height - y : (height - y) * 0.35,
     },
   ]
 
@@ -165,6 +218,37 @@ function quadraticPoint(start: number, control: number, end: number, amount: num
   return inverse * inverse * start + 2 * inverse * amount * control + amount * amount * end
 }
 
+function getMovementPoint(round: Round, progress: number, now: number) {
+  const eased = easeOutCubic(progress)
+  let x = quadraticPoint(round.spawnX, round.controlX, round.targetX, eased)
+  let y = quadraticPoint(round.spawnY, round.controlY, round.targetY, eased)
+  const distance = Math.hypot(round.targetX - round.spawnX, round.targetY - round.spawnY)
+  const wobble = Math.sin(progress * Math.PI * 6 + round.id) * Math.min(46, distance * 0.08)
+  const hop = Math.abs(Math.sin(progress * Math.PI * 5))
+
+  if (round.gameId === 'butterfly') {
+    y += Math.sin(progress * Math.PI * 7) * 42
+    x += Math.cos(progress * Math.PI * 4) * 18
+  } else if (round.gameId === 'bird' || round.gameId === 'squirrel') {
+    const segment = Math.floor(progress * 5)
+    x += (segment % 2 ? -1 : 1) * 28 * (1 - Math.abs((progress * 5) % 1 - 0.5))
+    y += Math.sin(progress * Math.PI * 5) * 22
+  } else if (round.gameId === 'cricket' || round.gameId === 'frog') {
+    y -= hop * (round.gameId === 'frog' ? 76 : 58)
+  } else if (round.gameId === 'gecko' || round.gameId === 'beetle') {
+    x += wobble * 0.45
+    y += Math.sin(progress * Math.PI * 9 + round.id) * 12
+  } else if (round.gameId === 'snake') {
+    x += wobble
+    y += Math.cos(progress * Math.PI * 7 + round.id) * 20
+  } else if (round.gameId === 'firefly') {
+    x += Math.sin(now * 4.2 + round.id) * 28
+    y += Math.cos(now * 3.6 + round.id) * 34
+  }
+
+  return { x, y }
+}
+
 function createRound(
   id: number,
   width: number,
@@ -181,7 +265,8 @@ function createRound(
       ? fishTypes[Math.floor(Math.random() * fishTypes.length)]
       : targetStyles[gameId]
   const distance = Math.hypot(target.x - spawn.x, target.y - spawn.y)
-  const pace = gameId === 'dragonfly' ? 0.66 : gameId === 'mouse' ? 0.7 : 0.78
+  const profile = getProfile(gameId)
+  const pace = profile.pace
   const swimDuration = Math.max(3.4, Math.min(7.8, distance / (config.fishSpeed * pace)))
 
   return {
@@ -196,12 +281,12 @@ function createRound(
     controlY: control.y,
     fishX: spawn.x,
     fishY: spawn.y,
-    fishSize: config.fishSize * 1.34,
+    fishSize: config.fishSize * profile.size,
     fishType: fishType.type,
     gameId,
     color: fishType.color,
     accent: fishType.accent,
-    bubbleDuration: rand(1.45, 2.35),
+    bubbleDuration: rand(profile.cueDuration[0], profile.cueDuration[1]),
     swimDuration,
     rewardUntil: 0,
     missUntil: 0,
@@ -282,19 +367,177 @@ function drawDragonflyScene(ctx: CanvasRenderingContext2D, width: number, height
   ctx.restore()
 }
 
+function drawFlowerScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  drawMeadow(ctx, width, height)
+  ctx.save()
+  for (let i = 0; i < 14; i += 1) {
+    const x = (i * 103) % width
+    const y = height * (0.62 + ((i * 11) % 24) / 100)
+    ctx.fillStyle = i % 2 ? '#ff9bd1' : '#fff06a'
+    for (let p = 0; p < 5; p += 1) {
+      const angle = (Math.PI * 2 * p) / 5
+      ctx.beginPath()
+      ctx.ellipse(x + Math.cos(angle) * 12, y + Math.sin(angle) * 8, 10, 6, angle, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
+}
+
+function drawBranchScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#d9fbff')
+  gradient.addColorStop(0.58, '#78cfe0')
+  gradient.addColorStop(1, '#3e9a72')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  ctx.strokeStyle = '#7a5637'
+  ctx.lineWidth = 18
+  ctx.lineCap = 'round'
+  for (let i = 0; i < 4; i += 1) {
+    const y = height * (0.24 + i * 0.14)
+    ctx.beginPath()
+    ctx.moveTo(-40, y)
+    ctx.quadraticCurveTo(width * 0.38, y + Math.sin(i) * 36, width + 40, y - 18)
+    ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(183, 227, 95, 0.72)'
+  for (let i = 0; i < 18; i += 1) {
+    ctx.beginPath()
+    ctx.ellipse((i * 83) % width, height * (0.18 + ((i * 13) % 48) / 100), 24, 12, Math.sin(i), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawNightScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#07152c')
+  gradient.addColorStop(0.6, '#143b57')
+  gradient.addColorStop(1, '#195f4f')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  for (let i = 0; i < 28; i += 1) {
+    ctx.globalAlpha = 0.35 + ((i * 7) % 40) / 100
+    ctx.fillStyle = i % 3 ? '#d7ff55' : '#ffffff'
+    ctx.beginPath()
+    ctx.arc((i * 127) % width, height * (0.14 + ((i * 19) % 72) / 100), 2 + (i % 3), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawWallScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height)
+  gradient.addColorStop(0, '#d8e3df')
+  gradient.addColorStop(1, '#8ca69d')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  ctx.globalAlpha = 0.22
+  ctx.strokeStyle = '#47675f'
+  ctx.lineWidth = 3
+  for (let y = 50; y < height; y += 90) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(width, y + Math.sin(y) * 8)
+    ctx.stroke()
+  }
+  for (let x = 80; x < width; x += 140) {
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x + Math.sin(x) * 12, height)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawLeafScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#bde9d5')
+  gradient.addColorStop(1, '#7d9d4f')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  for (let i = 0; i < 30; i += 1) {
+    ctx.fillStyle = i % 3 === 0 ? '#f1d85b' : i % 3 === 1 ? '#c98a4f' : '#6c9143'
+    ctx.beginPath()
+    ctx.ellipse((i * 91) % width, height * (0.48 + ((i * 17) % 48) / 100), 26, 12, i, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawSandScene(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#d8fbff')
+  gradient.addColorStop(0.52, '#e7d28f')
+  gradient.addColorStop(1, '#c5a965')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  ctx.globalAlpha = 0.28
+  ctx.strokeStyle = '#fff2b8'
+  ctx.lineWidth = 3
+  for (let i = 0; i < 12; i += 1) {
+    const y = height * (0.44 + i * 0.045)
+    ctx.beginPath()
+    ctx.moveTo(-30, y)
+    for (let x = -30; x < width + 60; x += 90) {
+      ctx.quadraticCurveTo(x + 45, y + Math.sin(i + x) * 12, x + 90, y)
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
 function drawScene(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   gameId: GameId,
 ) {
-  if (gameId === 'mouse') {
+  const scene = getProfile(gameId).scene
+
+  if (scene === 'meadow') {
     drawMeadow(ctx, width, height)
     return
   }
 
-  if (gameId === 'dragonfly') {
+  if (scene === 'air') {
     drawDragonflyScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'flowers') {
+    drawFlowerScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'branch') {
+    drawBranchScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'night') {
+    drawNightScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'wall') {
+    drawWallScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'leaves') {
+    drawLeafScene(ctx, width, height)
+    return
+  }
+
+  if (scene === 'sand') {
+    drawSandScene(ctx, width, height)
     return
   }
 
@@ -362,7 +605,9 @@ function drawCue(
 ) {
   const age = now - round.phaseStartedAt
 
-  if (round.gameId === 'mouse') {
+  const profile = getProfile(round.gameId)
+
+  if (profile.scene === 'meadow' || profile.scene === 'leaves') {
     const pulse = (Math.sin(age * 5) + 1) / 2
     ctx.save()
     ctx.globalAlpha = 0.58
@@ -388,14 +633,73 @@ function drawCue(
     return
   }
 
-  if (round.gameId === 'dragonfly') {
+  if (profile.scene === 'wall') {
+    const pulse = (Math.sin(age * 6) + 1) / 2
+    ctx.save()
+    ctx.globalAlpha = 0.52
+    ctx.strokeStyle = '#fff2a6'
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.arc(round.spawnX, round.spawnY, 18 + pulse * 14, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(round.spawnX - 28, round.spawnY + 10)
+    ctx.quadraticCurveTo(round.spawnX, round.spawnY - 18 - pulse * 8, round.spawnX + 30, round.spawnY + 8)
+    ctx.stroke()
+    ctx.restore()
+    return
+  }
+
+  if (profile.scene === 'branch') {
+    const pulse = Math.sin(age * 7)
+    ctx.save()
+    ctx.strokeStyle = '#fff1a6'
+    ctx.lineWidth = 5
+    ctx.globalAlpha = 0.5
+    ctx.beginPath()
+    ctx.ellipse(round.spawnX, round.spawnY, 36 + pulse * 5, 18, 0, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.fillStyle = '#b8e35f'
+    for (let i = 0; i < 5; i += 1) {
+      ctx.beginPath()
+      ctx.ellipse(
+        round.spawnX + (i - 2) * 20,
+        round.spawnY - 28 + Math.sin(age * 8 + i) * 8,
+        16,
+        8,
+        i,
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+    }
+    ctx.restore()
+    return
+  }
+
+  if (profile.scene === 'sand') {
+    const pulse = (Math.sin(age * 5) + 1) / 2
+    ctx.save()
+    ctx.strokeStyle = '#fff4b2'
+    ctx.lineWidth = 3
+    ctx.globalAlpha = 0.54
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath()
+      ctx.ellipse(round.spawnX, round.spawnY, 24 + i * 14 + pulse * 8, 7 + i * 4, 0, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.restore()
+    return
+  }
+
+  if (profile.scene === 'air' || profile.scene === 'flowers' || profile.scene === 'night') {
     ctx.save()
     for (let i = 0; i < 5; i += 1) {
       const phase = (age * 0.78 + i * 0.2) % 1
       const angle = i * 1.55 + age * 0.6
       const radius = 10 + phase * 36
       ctx.globalAlpha = (1 - phase) * 0.74
-      ctx.fillStyle = i % 2 ? '#ffffff' : '#fff17d'
+      ctx.fillStyle = profile.scene === 'night' ? '#d7ff55' : i % 2 ? '#ffffff' : '#fff17d'
       ctx.beginPath()
       ctx.arc(
         round.spawnX + Math.cos(angle) * radius,
@@ -641,6 +945,182 @@ function drawDragonfly(ctx: CanvasRenderingContext2D, round: Round, now: number)
   ctx.restore()
 }
 
+function drawWingedTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(round.targetY - round.controlY, round.targetX - round.controlX)
+  const beat = Math.sin((now - round.bornAt) * 18) * 0.2
+  const isButterfly = round.gameId === 'butterfly'
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(angle + Math.sin(now * 4) * 0.16)
+  ctx.fillStyle = isButterfly ? 'rgba(255, 155, 209, 0.78)' : 'rgba(121, 201, 255, 0.82)'
+  ctx.strokeStyle = '#fff8b6'
+  ctx.lineWidth = Math.max(3, round.fishSize * 0.08)
+  ctx.beginPath()
+  ctx.ellipse(-round.fishSize * 0.25, -round.fishSize * 0.36 - beat * round.fishSize, round.fishSize * 0.56, round.fishSize * 0.46, -0.5, 0, Math.PI * 2)
+  ctx.ellipse(-round.fishSize * 0.25, round.fishSize * 0.36 + beat * round.fishSize, round.fishSize * 0.56, round.fishSize * 0.46, 0.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(round.fishSize * 0.22, 0, round.fishSize * 0.62, round.fishSize * 0.22, 0, 0, Math.PI * 2)
+  ctx.fill()
+  if (round.gameId === 'bird') {
+    ctx.fillStyle = round.accent
+    ctx.beginPath()
+    ctx.moveTo(round.fishSize * 0.82, 0)
+    ctx.lineTo(round.fishSize * 1.32, -round.fishSize * 0.14)
+    ctx.lineTo(round.fishSize * 0.82, round.fishSize * 0.16)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.58, -round.fishSize * 0.08, round.fishSize * 0.06, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawHopperTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(round.targetY - round.controlY, round.targetX - round.controlX)
+  const crouch = Math.sin((now - round.bornAt) * 14) * round.fishSize * 0.06
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY + crouch)
+  ctx.rotate(angle)
+  ctx.strokeStyle = '#fff8b6'
+  ctx.lineWidth = Math.max(3, round.fishSize * 0.08)
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize * 0.9, round.fishSize * 0.46, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.strokeStyle = round.accent
+  ctx.lineWidth = Math.max(4, round.fishSize * 0.1)
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-round.fishSize * 0.35, round.fishSize * 0.18)
+  ctx.lineTo(-round.fishSize * 0.82, round.fishSize * 0.62)
+  ctx.moveTo(round.fishSize * 0.3, round.fishSize * 0.18)
+  ctx.lineTo(round.fishSize * 0.8, round.fishSize * 0.58)
+  ctx.stroke()
+  if (round.gameId === 'frog') {
+    ctx.fillStyle = round.accent
+    ctx.beginPath()
+    ctx.arc(round.fishSize * 0.28, -round.fishSize * 0.38, round.fishSize * 0.18, 0, Math.PI * 2)
+    ctx.arc(round.fishSize * 0.62, -round.fishSize * 0.3, round.fishSize * 0.16, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.48, -round.fishSize * 0.12, round.fishSize * 0.06, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawCrawlerTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(round.targetY - round.controlY, round.targetX - round.controlX)
+  const wiggle = Math.sin((now - round.bornAt) * 12) * 0.12
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(angle + wiggle)
+  ctx.strokeStyle = round.accent
+  ctx.lineWidth = Math.max(3, round.fishSize * 0.07)
+  ctx.lineCap = 'round'
+  if (round.gameId === 'gecko') {
+    ctx.beginPath()
+    ctx.moveTo(-round.fishSize * 0.8, 0)
+    ctx.quadraticCurveTo(-round.fishSize * 1.35, -round.fishSize * 0.32, -round.fishSize * 1.7, round.fishSize * 0.16)
+    ctx.stroke()
+  }
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(0, 0, round.fishSize * 0.95, round.fishSize * 0.38, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  for (let i = -1; i <= 1; i += 2) {
+    ctx.beginPath()
+    ctx.moveTo(-round.fishSize * 0.25, i * round.fishSize * 0.22)
+    ctx.lineTo(-round.fishSize * 0.7, i * round.fishSize * 0.56)
+    ctx.moveTo(round.fishSize * 0.28, i * round.fishSize * 0.2)
+    ctx.lineTo(round.fishSize * 0.74, i * round.fishSize * 0.5)
+    ctx.stroke()
+  }
+  if (round.gameId === 'beetle') {
+    ctx.strokeStyle = '#214d35'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(0, -round.fishSize * 0.34)
+    ctx.lineTo(0, round.fishSize * 0.34)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 0.54, -round.fishSize * 0.1, round.fishSize * 0.06, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawSnake(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const angle = Math.atan2(round.targetY - round.controlY, round.targetX - round.controlX)
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(angle)
+  ctx.strokeStyle = '#fff8b6'
+  ctx.lineWidth = round.fishSize * 0.34
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-round.fishSize * 1.5, 0)
+  for (let i = -1.4; i <= 1.0; i += 0.35) {
+    ctx.lineTo(round.fishSize * i, Math.sin(i * 4 + now * 8) * round.fishSize * 0.28)
+  }
+  ctx.stroke()
+  ctx.strokeStyle = round.color
+  ctx.lineWidth = round.fishSize * 0.24
+  ctx.stroke()
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 1.05, 0, round.fishSize * 0.28, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#073247'
+  ctx.beginPath()
+  ctx.arc(round.fishSize * 1.16, -round.fishSize * 0.08, round.fishSize * 0.05, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawSquirrel(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  drawMouse(ctx, { ...round, color: round.color, accent: round.accent, fishSize: round.fishSize * 0.96 }, now)
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(Math.atan2(round.targetY - round.controlY, round.targetX - round.controlX))
+  ctx.strokeStyle = round.color
+  ctx.lineWidth = round.fishSize * 0.22
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-round.fishSize * 0.7, -round.fishSize * 0.08)
+  ctx.quadraticCurveTo(-round.fishSize * 1.45, -round.fishSize * 1.0, -round.fishSize * 0.58, -round.fishSize * 1.12)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawFirefly(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const blink = 0.45 + (Math.sin(now * 9 + round.id) + 1) * 0.28
+  ctx.save()
+  ctx.globalAlpha = blink
+  const glow = ctx.createRadialGradient(round.fishX, round.fishY, 0, round.fishX, round.fishY, round.fishSize * 2.8)
+  glow.addColorStop(0, 'rgba(215, 255, 85, 0.95)')
+  glow.addColorStop(0.45, 'rgba(215, 255, 85, 0.32)')
+  glow.addColorStop(1, 'rgba(215, 255, 85, 0)')
+  ctx.fillStyle = glow
+  ctx.beginPath()
+  ctx.arc(round.fishX, round.fishY, round.fishSize * 2.8, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = round.color
+  ctx.beginPath()
+  ctx.ellipse(round.fishX, round.fishY, round.fishSize * 0.42, round.fishSize * 0.7, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
 function drawTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
   if (round.gameId === 'mouse') {
     drawMouse(ctx, round, now)
@@ -649,6 +1129,36 @@ function drawTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
 
   if (round.gameId === 'dragonfly') {
     drawDragonfly(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'butterfly' || round.gameId === 'bird') {
+    drawWingedTarget(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'cricket' || round.gameId === 'frog') {
+    drawHopperTarget(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'gecko' || round.gameId === 'beetle') {
+    drawCrawlerTarget(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'snake') {
+    drawSnake(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'squirrel') {
+    drawSquirrel(ctx, round, now)
+    return
+  }
+
+  if (round.gameId === 'firefly') {
+    drawFirefly(ctx, round, now)
     return
   }
 
@@ -928,19 +1438,9 @@ export function GameCanvas({
           }
         } else if (round.phase === 'target') {
           const progress = clamp01((now - round.phaseStartedAt) / round.swimDuration)
-          const eased = easeOutCubic(progress)
-          round.fishX = quadraticPoint(
-            round.spawnX,
-            round.controlX,
-            round.targetX,
-            eased,
-          )
-          round.fishY = quadraticPoint(
-            round.spawnY,
-            round.controlY,
-            round.targetY,
-            eased,
-          )
+          const point = getMovementPoint(round, progress, now)
+          round.fishX = point.x
+          round.fishY = point.y
 
           if (progress >= 1) {
             round.phase = 'miss'
