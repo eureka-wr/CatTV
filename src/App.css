@@ -1,7 +1,10 @@
 .lobby-screen {
-  min-height: 100svh;
+  height: 100svh;
+  box-sizing: border-box;
   display: grid;
-  place-items: center;
+  align-items: start;
+  justify-items: center;
+  overflow-y: auto;
   padding: clamp(18px, 4vw, 52px);
   background:
     radial-gradient(circle at 22% 18%, rgba(255, 238, 104, 0.34), transparent 22%),
@@ -22,7 +25,7 @@
   display: grid;
   place-items: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   border: 3px solid rgba(255, 255, 255, 0.62);
   border-radius: 8px;
   background:
@@ -39,6 +42,33 @@
 
 .game-tile:hover {
   transform: translateY(-2px) scale(1.01);
+}
+
+.game-tile::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  z-index: 2;
+  min-width: max-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(5, 45, 66, 0.84);
+  color: #fff8be;
+  font-size: 0.95rem;
+  font-weight: 900;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.game-tile:hover::after,
+.game-tile:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .game-tile svg {

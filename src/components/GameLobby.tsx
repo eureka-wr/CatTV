@@ -28,6 +28,21 @@ const games: GameTile[] = [
   { id: 'firefly', ready: true, className: 'firefly-tile' },
 ]
 
+const gameLabels: Record<GameId, string> = {
+  fish: '小鱼',
+  mouse: '老鼠',
+  dragonfly: '蜻蜓',
+  butterfly: '蝴蝶',
+  bird: '小鸟',
+  cricket: '蟋蟀',
+  frog: '青蛙',
+  gecko: '壁虎',
+  beetle: '甲虫',
+  snake: '小蛇',
+  squirrel: '松鼠',
+  firefly: '萤火虫',
+}
+
 function FishIcon() {
   return (
     <svg viewBox="0 0 180 180" aria-hidden="true">
@@ -208,9 +223,11 @@ export function GameLobby({ language, onStart }: Props) {
       <section className="game-grid" aria-label={t.title}>
         {games.map((game) => (
           <button
-            aria-label={game.id}
+            aria-label={gameLabels[game.id]}
             className={`game-tile ${game.className}`}
+            data-label={gameLabels[game.id]}
             key={game.id}
+            title={gameLabels[game.id]}
             type="button"
             onClick={() => onStart(game.id)}
           >
