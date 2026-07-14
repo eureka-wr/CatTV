@@ -1595,6 +1595,18 @@ export function GameCanvas({
       <button
         className="corner-control corner-control-top-left"
         type="button"
+        onPointerDown={handleStopPointerDown}
+        onPointerLeave={clearStopHold}
+        onPointerUp={clearStopHold}
+        aria-label={isEndless ? t.holdToStop : t.stop}
+      >
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+        </svg>
+      </button>
+      <button
+        className="corner-control corner-control-top-right"
+        type="button"
         onClick={onPauseToggle}
         aria-label={t.pauseGame}
       >
@@ -1607,18 +1619,6 @@ export function GameCanvas({
             <path d="M15 12h7v24h-7zM27 12h7v24h-7z" />
           </svg>
         )}
-      </button>
-      <button
-        className={`corner-control corner-control-top-right ${isEndless ? 'hold-stop' : ''}`}
-        type="button"
-        onPointerDown={handleStopPointerDown}
-        onPointerLeave={clearStopHold}
-        onPointerUp={clearStopHold}
-        aria-label={isEndless ? t.holdToStop : t.stop}
-      >
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
-        </svg>
       </button>
       <button
         className="corner-control corner-control-bottom-left"
