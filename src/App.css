@@ -497,33 +497,52 @@ legend {
   cursor: crosshair;
 }
 
-.game-controls {
+.corner-control {
   position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 7px;
-  border-radius: 8px;
-  background: rgba(5, 45, 66, 0.5);
-  backdrop-filter: blur(12px);
-}
-
-.game-controls button {
-  width: 48px;
-  height: 48px;
+  z-index: 3;
+  width: clamp(76px, 10vw, 96px);
+  height: clamp(76px, 10vw, 96px);
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.82);
+  border: 3px solid rgba(255, 255, 255, 0.58);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
   color: #073247;
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 12px 28px rgba(3, 48, 72, 0.22),
+    inset 0 0 0 2px rgba(255, 248, 190, 0.62);
+  touch-action: manipulation;
 }
 
-.game-controls svg {
-  width: 26px;
-  height: 26px;
+.corner-control:active {
+  transform: scale(0.96);
+}
+
+.corner-control svg {
+  width: 42px;
+  height: 42px;
   fill: currentColor;
+}
+
+.corner-control-top-left {
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+}
+
+.corner-control-top-right {
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+}
+
+.corner-control-bottom-left {
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: max(18px, env(safe-area-inset-left));
+}
+
+.corner-control-bottom-right {
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
 }
 
 .summary-grid {
@@ -604,13 +623,13 @@ dd {
     flex-direction: column;
   }
 
-  .game-controls {
-    left: max(10px, env(safe-area-inset-left));
-    justify-content: flex-start;
+  .corner-control {
+    width: 72px;
+    height: 72px;
   }
 
-  .game-controls button {
-    width: 46px;
-    height: 46px;
+  .corner-control svg {
+    width: 36px;
+    height: 36px;
   }
 }

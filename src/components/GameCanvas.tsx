@@ -1592,41 +1592,54 @@ export function GameCanvas({
         aria-label={t.gameCanvas}
         onPointerDown={handlePointerDown}
       />
-      <div className="game-controls" aria-label={t.ownerControls}>
-        <button className="icon-control" type="button" onClick={onPreviousGame} aria-label="previous game">
+      <button
+        className="corner-control corner-control-top-left"
+        type="button"
+        onClick={onPauseToggle}
+        aria-label={t.pauseGame}
+      >
+        {paused ? (
           <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M15 24 31 12v24zM10 12h5v24h-5z" />
+            <path d="M18 13v22l17-11z" />
           </svg>
-        </button>
-        <button className="icon-control" type="button" onClick={onPauseToggle} aria-label={t.pauseGame}>
-          {paused ? (
-            <svg viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M18 13v22l17-11z" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M15 12h7v24h-7zM27 12h7v24h-7z" />
-            </svg>
-          )}
-        </button>
-        <button
-          className={`icon-control ${isEndless ? 'hold-stop' : ''}`}
-          type="button"
-          onPointerDown={handleStopPointerDown}
-          onPointerLeave={clearStopHold}
-          onPointerUp={clearStopHold}
-          aria-label={isEndless ? t.holdToStop : t.stop}
-        >
+        ) : (
           <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+            <path d="M15 12h7v24h-7zM27 12h7v24h-7z" />
           </svg>
-        </button>
-        <button className="icon-control" type="button" onClick={onNextGame} aria-label="next game">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M33 24 17 12v24zM33 12h5v24h-5z" />
-          </svg>
-        </button>
-      </div>
+        )}
+      </button>
+      <button
+        className={`corner-control corner-control-top-right ${isEndless ? 'hold-stop' : ''}`}
+        type="button"
+        onPointerDown={handleStopPointerDown}
+        onPointerLeave={clearStopHold}
+        onPointerUp={clearStopHold}
+        aria-label={isEndless ? t.holdToStop : t.stop}
+      >
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+        </svg>
+      </button>
+      <button
+        className="corner-control corner-control-bottom-left"
+        type="button"
+        onClick={onPreviousGame}
+        aria-label="previous game"
+      >
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M15 24 31 12v24zM10 12h5v24h-5z" />
+        </svg>
+      </button>
+      <button
+        className="corner-control corner-control-bottom-right"
+        type="button"
+        onClick={onNextGame}
+        aria-label="next game"
+      >
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M33 24 17 12v24zM33 12h5v24h-5z" />
+        </svg>
+      </button>
     </main>
   )
 }
