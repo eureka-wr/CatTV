@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 import os
+import subprocess
 import sys
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -13,10 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 POSTER_DIR = ROOT / "public" / "social" / "cat-posters"
 OUT_DIR = ROOT / "public" / "social"
 OUT_FILE = OUT_DIR / "cat-tv-parent-ad.mp4"
+SILENT_VIDEO_FILE = OUT_DIR / "cat-tv-parent-ad.silent.mp4"
+AUDIO_FILE = OUT_DIR / "cat-tv-parent-ad-meows.wav"
 
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 24
+SAMPLE_RATE = 44_100
 
 FONT_CANDIDATES = [
     "/System/Library/Fonts/PingFang.ttc",
@@ -208,6 +213,95 @@ def frames():
         yield compose_outro(i / max(1, int(2.2 * FPS) - 1))
 
 
+def total_duration() -> float:
+    return 1.6 + sum(float(slide["duration"]) for slide in SLIDES) + 2.2
+
+
+def add_meow(audio: np.ndarray, start: float, duration: float, base_freq: float, volume: float) -> None:
+    start_i = max(0, int(start * SAMPLE_RATE))
+    count = min(len(audio) - start_i, int(duration * SAMPLE_RATE))
+    if count <= 0:
+        return
+
+    t = np.linspace(0, duration, count, endpoint=False)
+    pitch = base_freq * (1.0 + 0.22 * np.exp(-t * 7.5)) * (1.0 - 0.28 * (t / duration))
+    vibrato = 1 + 0.035 * np.sin(2 * math.pi * (18 + base_freq / 130) * t)
+    phase = 2 * math.pi * np.cumsum(pitch * vibrato) / SAMPLE_RATE
+    voice = (
+        np.sin(phase)
+        + 0.42 * np.sin(phase * 2.04 + 0.8)
+        + 0.18 * np.sin(phase * 3.08 + 1.7)
+    )
+    mouth = 0.74 + 0.26 * np.sin(math.pi * np.clip(t / duration, 0, 1))
+    attack = np.minimum(1, t / 0.055)
+    release = np.minimum(1, (duration - t) / 0.16)
+    envelope = np.clip(attack, 0, 1) * np.clip(release, 0, 1) * mouth
+    trill = 0.08 * np.sin(2 * math.pi * 42 * t) * np.sin(2 * math.pi * 6 * t)
+    audio[start_i : start_i + count] += volume * envelope * np.tanh(voice + trill)
+
+
+def add_purr(audio: np.ndarray, start: float, duration: float, volume: float) -> None:
+    start_i = max(0, int(start * SAMPLE_RATE))
+    count = min(len(audio) - start_i, int(duration * SAMPLE_RATE))
+    if count <= 0:
+        return
+
+    t = np.linspace(0, duration, count, endpoint=False)
+    rumble = np.sin(2 * math.pi * 58 * t) + 0.45 * np.sin(2 * math.pi * 116 * t)
+    pulse = 0.55 + 0.45 * np.sin(2 * math.pi * 10.5 * t)
+    fade = np.minimum(1, np.minimum(t / 0.35, (duration - t) / 0.55))
+    audio[start_i : start_i + count] += volume * rumble * pulse * fade
+
+
+def create_audio_track(duration: float) -> None:
+    audio = np.zeros(int((duration + 0.05) * SAMPLE_RATE), dtype=np.float32)
+    add_purr(audio, 0.05, duration - 0.1, 0.035)
+
+    phrase_starts = [0.28, 0.82, 2.15, 3.6, 5.05, 6.5, 7.95, 9.4, 10.85, 12.3, 13.7]
+    for index, start in enumerate(phrase_starts):
+        base = 720 + (index % 4) * 70
+        add_meow(audio, start, 0.42, base, 0.24)
+        add_meow(audio, start + 0.43, 0.34, base * 1.16, 0.18)
+
+    add_meow(audio, duration - 1.35, 0.62, 860, 0.28)
+    add_meow(audio, duration - 0.72, 0.48, 980, 0.22)
+    audio = np.tanh(audio * 1.28) * 0.84
+    pcm = np.int16(np.clip(audio, -1, 1) * 32767)
+
+    with wave.open(str(AUDIO_FILE), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(SAMPLE_RATE)
+        wav.writeframes(pcm.tobytes())
+
+
+def mux_audio() -> None:
+    try:
+        import imageio_ffmpeg
+    except ImportError as exc:
+        raise SystemExit("imageio-ffmpeg is required to mux audio") from exc
+
+    command = [
+        imageio_ffmpeg.get_ffmpeg_exe(),
+        "-y",
+        "-i",
+        str(SILENT_VIDEO_FILE),
+        "-i",
+        str(AUDIO_FILE),
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+        "-shortest",
+        str(OUT_FILE),
+    ]
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    SILENT_VIDEO_FILE.unlink(missing_ok=True)
+    AUDIO_FILE.unlink(missing_ok=True)
+
+
 def main() -> None:
     try:
         import imageio.v2 as imageio
@@ -216,7 +310,7 @@ def main() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with imageio.get_writer(
-        OUT_FILE,
+        SILENT_VIDEO_FILE,
         fps=FPS,
         codec="libx264",
         quality=8,
@@ -225,6 +319,8 @@ def main() -> None:
     ) as writer:
         for frame in frames():
             writer.append_data(np.asarray(frame))
+    create_audio_track(total_duration())
+    mux_audio()
     print(OUT_FILE)
 
 
