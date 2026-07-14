@@ -4,6 +4,8 @@ The current promotional video voice track uses:
 
 - `cat-come-here.m4a`: user-provided source recording
 - `cat-come-here.wav`: 44.1kHz mono WAV converted from `cat-come-here.m4a`
+- `cat-like-you.m4a`: user-provided source recording for the "like you" ad
+- `cat-like-you.wav`: 44.1kHz mono WAV converted from `cat-like-you.m4a`
 
 The promotional video uses real cat sound effects from Mixkit's free cat sound
 effects library as fallback/source material:

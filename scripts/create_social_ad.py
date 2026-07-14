@@ -14,9 +14,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 POSTER_DIR = ROOT / "public" / "social" / "cat-posters"
 OUT_DIR = ROOT / "public" / "social"
-OUT_FILE = OUT_DIR / "cat-tv-parent-ad.mp4"
-SILENT_VIDEO_FILE = OUT_DIR / "cat-tv-parent-ad.silent.mp4"
-AUDIO_FILE = OUT_DIR / "cat-tv-parent-ad-meows.wav"
+SILENT_VIDEO_FILE = OUT_DIR / "cat-tv-social-ad.silent.mp4"
 AUDIO_SOURCE_DIR = OUT_DIR / "audio"
 
 WIDTH = 1080
@@ -99,6 +97,19 @@ SUBTITLE_FONT = font(46)
 SMALL_FONT = font(34)
 CTA_FONT = font(66)
 URL_FONT = font(46)
+
+AD_VARIANTS = [
+    {
+        "output": "cat-tv-parent-ad.mp4",
+        "audio_source": "cat-come-here.wav",
+        "audio_temp": "cat-tv-parent-ad-audio.wav",
+    },
+    {
+        "output": "cat-tv-like-you-ad.mp4",
+        "audio_source": "cat-like-you.wav",
+        "audio_temp": "cat-tv-like-you-ad-audio.wav",
+    },
+]
 
 
 def ease(t: float) -> float:
@@ -278,9 +289,9 @@ def place_clip(audio: np.ndarray, clip: np.ndarray, start: float, volume: float)
     audio[start_i : start_i + count] += clip[:count] * volume
 
 
-def create_audio_track(duration: float) -> None:
+def create_audio_track(duration: float, source_filename: str, output_file: Path) -> None:
     audio = np.zeros(int((duration + 0.05) * SAMPLE_RATE), dtype=np.float32)
-    custom_call = load_custom_audio("cat-come-here.wav")
+    custom_call = load_custom_audio(source_filename)
     place_clip(audio, custom_call, 0.0, 1.08)
 
     fade_count = int(0.35 * SAMPLE_RATE)
@@ -292,14 +303,14 @@ def create_audio_track(duration: float) -> None:
     audio = audio / peak * 0.86
     pcm = np.int16(np.clip(audio, -1, 1) * 32767)
 
-    with wave.open(str(AUDIO_FILE), "wb") as wav:
+    with wave.open(str(output_file), "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(SAMPLE_RATE)
         wav.writeframes(pcm.tobytes())
 
 
-def mux_audio() -> None:
+def mux_audio(silent_video_file: Path, audio_file: Path, output_file: Path) -> None:
     try:
         import imageio_ffmpeg
     except ImportError as exc:
@@ -309,9 +320,9 @@ def mux_audio() -> None:
         imageio_ffmpeg.get_ffmpeg_exe(),
         "-y",
         "-i",
-        str(SILENT_VIDEO_FILE),
+        str(silent_video_file),
         "-i",
-        str(AUDIO_FILE),
+        str(audio_file),
         "-c:v",
         "copy",
         "-c:a",
@@ -319,11 +330,9 @@ def mux_audio() -> None:
         "-b:a",
         "160k",
         "-shortest",
-        str(OUT_FILE),
+        str(output_file),
     ]
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    SILENT_VIDEO_FILE.unlink(missing_ok=True)
-    AUDIO_FILE.unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -343,9 +352,16 @@ def main() -> None:
     ) as writer:
         for frame in frames():
             writer.append_data(np.asarray(frame))
-    create_audio_track(total_duration())
-    mux_audio()
-    print(OUT_FILE)
+
+    for variant in AD_VARIANTS:
+        output_file = OUT_DIR / str(variant["output"])
+        audio_file = OUT_DIR / str(variant["audio_temp"])
+        create_audio_track(total_duration(), str(variant["audio_source"]), audio_file)
+        mux_audio(SILENT_VIDEO_FILE, audio_file, output_file)
+        audio_file.unlink(missing_ok=True)
+        print(output_file)
+
+    SILENT_VIDEO_FILE.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
