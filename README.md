@@ -155,5 +155,5 @@ repository updates the public site through the existing Vercel integration.
 Production site:
 
 ```text
-https://fish.cattv.space
+https://game.cattv.space
 ```

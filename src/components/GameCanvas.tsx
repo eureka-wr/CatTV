@@ -32,7 +32,7 @@ type PondDecoration = {
   kind: 'plant' | 'rock' | 'lily'
 }
 
-type RoundPhase = 'cue' | 'target' | 'reward' | 'miss'
+type RoundPhase = 'cue' | 'target' | 'held' | 'reward' | 'miss'
 
 type Round = {
   id: number
@@ -1261,6 +1261,7 @@ export function GameCanvas({
   const animationRef = useRef<number>(0)
   const roundRef = useRef<Round | null>(null)
   const rippleRef = useRef<SimpleRipple[]>([])
+  const activePointerIdRef = useRef<number | null>(null)
   const statsRef = useRef({
     startTime: performance.now(),
     touches: 0,
@@ -1343,6 +1344,7 @@ export function GameCanvas({
 
     roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
     rippleRef.current = []
+    activePointerIdRef.current = null
     statsRef.current = {
       startTime: performance.now(),
       touches: 0,
@@ -1473,6 +1475,10 @@ export function GameCanvas({
         drawTarget(ctx, visibleRound, now)
       }
 
+      if (visibleRound.phase === 'held') {
+        drawTarget(ctx, visibleRound, now)
+      }
+
       if (visibleRound.phase === 'reward') {
         drawReward(ctx, visibleRound, now)
       }
@@ -1509,6 +1515,61 @@ export function GameCanvas({
     stopSession,
   ])
 
+  const getCanvasPoint = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      return null
+    }
+
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    }
+  }
+
+  const releaseHeldTarget = (event: PointerEvent<HTMLCanvasElement>) => {
+    const round = roundRef.current
+    if (!round || round.phase !== 'held' || activePointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    const point = getCanvasPoint(event)
+    if (point) {
+      round.fishX = point.x
+      round.fishY = point.y
+    }
+
+    const now = performance.now() / 1000
+    activePointerIdRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    sound.playSplash(config.soundIntensity)
+    round.phase = 'reward'
+    round.phaseStartedAt = now
+    round.rewardUntil = now + 1.18
+    rippleRef.current.push(
+      {
+        id: nextIdRef.current++,
+        x: round.fishX,
+        y: round.fishY,
+        age: 0,
+        maxAge: 0.85,
+        kind: 'catch',
+      },
+      {
+        id: nextIdRef.current++,
+        x: round.fishX,
+        y: round.fishY,
+        age: 0,
+        maxAge: 1.25,
+        kind: 'reward',
+      },
+    )
+  }
+
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     const round = roundRef.current
@@ -1516,9 +1577,12 @@ export function GameCanvas({
       return
     }
 
-    const rect = canvas.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
+    const point = getCanvasPoint(event)
+    if (!point) {
+      return
+    }
+
+    const { x, y } = point
     const now = performance.now() / 1000
     statsRef.current.touches += 1
 
@@ -1533,28 +1597,20 @@ export function GameCanvas({
         round.fishType,
         (statsRef.current.fishTypes.get(round.fishType) ?? 0) + 1,
       )
-      sound.playSplash(config.soundIntensity)
-      round.phase = 'reward'
+      activePointerIdRef.current = event.pointerId
+      event.currentTarget.setPointerCapture(event.pointerId)
+      round.phase = 'held'
       round.phaseStartedAt = now
-      round.rewardUntil = now + 1.18
-      rippleRef.current.push(
-        {
-          id: nextIdRef.current++,
-          x: round.fishX,
-          y: round.fishY,
-          age: 0,
-          maxAge: 0.85,
-          kind: 'catch',
-        },
-        {
-          id: nextIdRef.current++,
-          x: round.fishX,
-          y: round.fishY,
-          age: 0,
-          maxAge: 1.25,
-          kind: 'reward',
-        },
-      )
+      round.fishX = x
+      round.fishY = y
+      rippleRef.current.push({
+        id: nextIdRef.current++,
+        x,
+        y,
+        age: 0,
+        maxAge: 0.65,
+        kind: 'catch',
+      })
       return
     }
 
@@ -1566,6 +1622,26 @@ export function GameCanvas({
       maxAge: round.phase === 'cue' ? 0.7 : 0.5,
       kind: round.phase === 'cue' ? 'bubble' : 'tap',
     })
+  }
+
+  const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    const round = roundRef.current
+    if (
+      paused ||
+      !round ||
+      round.phase !== 'held' ||
+      activePointerIdRef.current !== event.pointerId
+    ) {
+      return
+    }
+
+    const point = getCanvasPoint(event)
+    if (!point) {
+      return
+    }
+
+    round.fishX = point.x
+    round.fishY = point.y
   }
 
   const handleStopPointerDown = () => {
@@ -1591,6 +1667,9 @@ export function GameCanvas({
         className="pond-canvas"
         aria-label={t.gameCanvas}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={releaseHeldTarget}
+        onPointerCancel={releaseHeldTarget}
       />
       <button
         className="corner-control corner-control-top-left"

@@ -160,7 +160,7 @@ def compose_slide(slide: dict[str, object], local_t: float, index: int) -> Image
     frame.alpha_composite(panel, (70, HEIGHT - 188))
     draw = ImageDraw.Draw(frame)
     draw.text((108, HEIGHT - 160), "Cat TV 猫咪游戏", font=SMALL_FONT, fill=(25, 40, 48, 255))
-    draw.text((108, HEIGHT - 116), "fish.cattv.space", font=SMALL_FONT, fill=(22, 112, 130, 255))
+    draw.text((108, HEIGHT - 116), "game.cattv.space", font=SMALL_FONT, fill=(22, 112, 130, 255))
 
     return frame.convert("RGB")
 
@@ -191,7 +191,7 @@ def compose_outro(local_t: float) -> Image.Image:
     panel = rounded_panel((840, 122), 61, (255, 255, 255, 225))
     frame.alpha_composite(panel, (70, 880))
     draw = ImageDraw.Draw(frame)
-    draw.text((118, 910), "fish.cattv.space", font=URL_FONT, fill=(12, 84, 102, 255))
+    draw.text((118, 910), "game.cattv.space", font=URL_FONT, fill=(12, 84, 102, 255))
     draw.text((74, 1060), "适合平板 / 触屏 / 猫咪爪爪", font=SMALL_FONT, fill=(255, 255, 255, 235))
 
     return frame.convert("RGB")
