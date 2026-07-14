@@ -251,6 +251,24 @@ def load_real_meow(filename: str) -> np.ndarray:
     return data
 
 
+def load_custom_audio(filename: str) -> np.ndarray:
+    path = AUDIO_SOURCE_DIR / filename
+    with wave.open(str(path), "rb") as wav:
+        sample_rate = wav.getframerate()
+        channels = wav.getnchannels()
+        sample_width = wav.getsampwidth()
+        frames = wav.readframes(wav.getnframes())
+
+    if sample_rate != SAMPLE_RATE or sample_width != 2:
+        raise ValueError(f"{path} must be 44.1kHz 16-bit PCM WAV")
+
+    data = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+
+    return data
+
+
 def place_clip(audio: np.ndarray, clip: np.ndarray, start: float, volume: float) -> None:
     start_i = max(0, int(start * SAMPLE_RATE))
     count = min(len(audio) - start_i, len(clip))
@@ -262,28 +280,16 @@ def place_clip(audio: np.ndarray, clip: np.ndarray, start: float, volume: float)
 
 def create_audio_track(duration: float) -> None:
     audio = np.zeros(int((duration + 0.05) * SAMPLE_RATE), dtype=np.float32)
-    attention = load_real_meow("little-cat-attention-meow.wav")
-    sweet = load_real_meow("sweet-kitty-meow.wav")
-    hungry = load_real_meow("domestic-cat-hungry-meow.wav")
+    custom_call = load_custom_audio("cat-come-here.wav")
+    place_clip(audio, custom_call, 0.0, 1.08)
 
-    schedule = [
-        (0.22, attention, 0.76),
-        (0.92, sweet, 0.72),
-        (2.15, attention, 0.58),
-        (3.85, sweet, 0.54),
-        (5.55, hungry, 0.52),
-        (7.25, attention, 0.56),
-        (8.95, sweet, 0.52),
-        (10.65, hungry, 0.50),
-        (12.35, attention, 0.58),
-        (13.62, sweet, 0.70),
-        (14.33, attention, 0.78),
-    ]
+    fade_count = int(0.35 * SAMPLE_RATE)
+    if fade_count:
+        audio[:fade_count] *= np.linspace(0, 1, fade_count)
+        audio[-fade_count:] *= np.linspace(1, 0, fade_count)
 
-    for start, clip, volume in schedule:
-        place_clip(audio, clip, start, volume)
-
-    audio = np.tanh(audio * 1.12) * 0.92
+    peak = float(np.max(np.abs(audio))) or 1.0
+    audio = audio / peak * 0.86
     pcm = np.int16(np.clip(audio, -1, 1) * 32767)
 
     with wave.open(str(AUDIO_FILE), "wb") as wav:

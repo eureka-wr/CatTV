@@ -1,7 +1,12 @@
 # Cat meow audio sources
 
+The current promotional video voice track uses:
+
+- `cat-come-here.m4a`: user-provided source recording
+- `cat-come-here.wav`: 44.1kHz mono WAV converted from `cat-come-here.m4a`
+
 The promotional video uses real cat sound effects from Mixkit's free cat sound
-effects library:
+effects library as fallback/source material:
 
 - `little-cat-attention-meow.wav`: Mixkit "Little cat attention meow" (SFX 86)
 - `sweet-kitty-meow.wav`: Mixkit "Sweet kitty meow" (SFX 93)
