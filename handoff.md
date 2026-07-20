@@ -41,15 +41,17 @@ The project currently has:
 - Social promo images and promo videos.
 - Public Vercel deployment on `game.cattv.space`.
 
-The publishing branch for the realistic-animal work is
+The publishing branch for the realistic-animal work was
 `agent/realistic-mouse-gecko-games`. Its baseline was:
 
 ```text
 2465640 Add project handoff document
 ```
 
-The realistic-mouse and realistic-gecko work described below is included on
-that branch and is intended to reach `main` through review/merge.
+The realistic-mouse and realistic-gecko work described below was published to
+`main` from that branch over SSH. The connected GitHub integration could push
+the branch but did not have permission to create a pull request (HTTP 403), so
+the verified fast-forward commit was pushed directly to `main` as requested.
 
 ## Realistic Mouse Prototype (2026-07-18)
 
