@@ -23,10 +23,10 @@ const baseStats: SessionStats = {
 }
 
 describe('session settings', () => {
-  it('uses 3 minutes and one fish by default', () => {
+  it('uses endless play and one animal by default', () => {
     expect(DEFAULT_SETTINGS).toEqual({
       age: 'adult',
-      duration: 3,
+      duration: 'endless',
       fishCount: 1,
       personality: 'curious',
     })

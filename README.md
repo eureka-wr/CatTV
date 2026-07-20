@@ -20,7 +20,7 @@ The design goals are:
 
 - Give cats a simple focus target instead of a busy human game UI.
 - Use animal-like movement: swimming, running, hopping, flying, crawling, and glowing.
-- Keep every round understandable: cue, target appears, target moves, catch or miss.
+- Keep the interaction understandable: cue, target appears, hold to stop, release to continue.
 - Let the owner switch games quickly without leaving the play session.
 - Keep the code easy to extend with more small-animal games.
 
@@ -49,17 +49,17 @@ The lobby contains 12 animal games in a gradual training sequence:
 
 ## How The Games Work
 
-Each game uses the same round structure:
+Each game uses the same infinite chase structure:
 
 1. A small cue appears, such as bubbles, grass movement, leaf shake, or glowing dots.
 2. One animal appears as the main target.
-3. The animal moves toward the edge of the screen.
-4. If the cat touches near the animal, the game shows a rewarding burst of light,
-   ripples, petals, or glow.
-5. If the animal escapes, the screen briefly darkens and a new round starts.
+3. The animal follows species-like paths between safe points inside the screen.
+4. While the cat holds the animal, it freezes at its current position.
+5. When the cat releases, the same animal continues from that position. It turns
+   before leaving the screen and can be caught repeatedly.
 
-The full session defaults to 3 minutes. There is no setup screen, no score screen,
-and no text-heavy cat-facing interface.
+The session is endless by default and runs until the owner returns to the lobby.
+There is no setup screen, no score screen, and no text-heavy cat-facing interface.
 
 ## Navigation
 
@@ -69,12 +69,17 @@ From the lobby:
 - Hover or focus an icon to show the animal name.
 - The lobby scrolls vertically on smaller screens.
 
-Inside a game, the controls are icon-only and placed on the left:
+Inside a game, the controls are icon-only and placed in the four corners:
 
 - Previous game
 - Pause / resume
 - Home / lobby
 - Next game
+
+Each control uses the same cream cat-paw silhouette, soft pink toe beans, and a
+rounded dark-plum icon centered inside the large paw pad. The irregular artwork
+sits inside a larger rectangular touch target, so the playful shape does not
+reduce paw usability.
 
 This makes it easy to move through the full training sequence without returning
 to the lobby after every game.
@@ -136,11 +141,12 @@ src/
   App.tsx                  App screen flow and game switching
   components/
     GameLobby.tsx          12-animal visual game lobby
-    GameCanvas.tsx         Canvas scenes, movement, cue, catch, reward, miss logic
+    GameCanvas.tsx         Canvas scenes, cue, hold/release, and continuous movement
   game/
     games.ts               Game IDs and sequence order
     difficultyConfig.ts    Shared speed, size, and reaction presets
-    session.ts             Default 3-minute session and helpers
+    infiniteMotion.ts      Shared in-screen target bounds and route selection
+    session.ts             Default endless session and helpers
     SoundManager.ts        Gentle splash/reward sound
     types.ts               Shared TypeScript types
 docs/

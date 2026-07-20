@@ -498,31 +498,95 @@ legend {
 }
 
 .corner-control {
+  --paw-fur: #fff7e5;
+  --paw-pad: #efa9aa;
+  --paw-ink: #614454;
+  --paw-rotation: 0deg;
   position: fixed;
   z-index: 3;
-  width: clamp(76px, 10vw, 96px);
-  height: clamp(76px, 10vw, 96px);
+  width: clamp(88px, 11vw, 108px);
+  height: clamp(88px, 11vw, 108px);
   display: grid;
   place-items: center;
-  border: 3px solid rgba(255, 255, 255, 0.58);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #073247;
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 12px 28px rgba(3, 48, 72, 0.22),
-    inset 0 0 0 2px rgba(255, 248, 190, 0.62);
+  padding: 0;
+  border: 0;
+  border-radius: 44%;
+  background: transparent;
+  color: var(--paw-ink);
+  cursor: pointer;
   touch-action: manipulation;
+  transition:
+    transform 140ms ease,
+    filter 140ms ease;
+}
+
+.corner-control::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 13% 17% at 18% 34%, var(--paw-pad) 0 64%, var(--paw-fur) 67% 100%, transparent 102%),
+    radial-gradient(ellipse 14% 18% at 38% 21%, var(--paw-pad) 0 64%, var(--paw-fur) 67% 100%, transparent 102%),
+    radial-gradient(ellipse 14% 18% at 62% 21%, var(--paw-pad) 0 64%, var(--paw-fur) 67% 100%, transparent 102%),
+    radial-gradient(ellipse 13% 17% at 82% 34%, var(--paw-pad) 0 64%, var(--paw-fur) 67% 100%, transparent 102%),
+    radial-gradient(ellipse 35% 31% at 50% 68%, var(--paw-pad) 0 72%, var(--paw-fur) 75% 100%, transparent 102%);
+  filter:
+    drop-shadow(0 10px 9px rgba(28, 49, 39, 0.26))
+    drop-shadow(0 2px 1px rgba(255, 255, 255, 0.68));
+  transform: rotate(var(--paw-rotation));
+  transform-origin: center;
+  transition:
+    filter 140ms ease,
+    transform 140ms ease;
+}
+
+.corner-control:hover::before {
+  filter:
+    drop-shadow(0 13px 10px rgba(28, 49, 39, 0.3))
+    drop-shadow(0 2px 1px rgba(255, 255, 255, 0.74));
+  transform: rotate(var(--paw-rotation)) scale(1.04);
 }
 
 .corner-control:active {
-  transform: scale(0.96);
+  transform: scale(0.92);
+}
+
+.corner-control:focus-visible {
+  outline: none;
+  filter:
+    drop-shadow(0 0 3px rgba(255, 255, 255, 0.96))
+    drop-shadow(0 0 7px rgba(255, 247, 200, 0.82));
 }
 
 .corner-control svg {
-  width: 42px;
-  height: 42px;
+  position: relative;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+  transform: translateY(clamp(14px, 1.8vw, 18px));
+}
+
+.control-icon-fill {
   fill: currentColor;
+}
+
+.control-icon-outline,
+.control-icon-accent {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.control-icon-outline {
+  stroke-width: 4.8;
+}
+
+.control-icon-accent {
+  stroke-width: 2.6;
+  opacity: 0.72;
 }
 
 .corner-control-top-left {
@@ -624,12 +688,13 @@ dd {
   }
 
   .corner-control {
-    width: 72px;
-    height: 72px;
+    width: 84px;
+    height: 84px;
   }
 
   .corner-control svg {
     width: 36px;
     height: 36px;
+    transform: translateY(14px);
   }
 }

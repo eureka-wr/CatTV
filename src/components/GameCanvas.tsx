@@ -12,6 +12,28 @@ import {
 import { copy } from '../i18n'
 import type { DifficultyConfig, Language, SessionSettings, SessionStats } from '../game/types'
 import type { GameId } from '../game/games'
+import {
+  clampToMovementBounds,
+  getMovementBounds,
+  pickNextInBoundsTarget,
+} from '../game/infiniteMotion'
+import {
+  getGeckoCrawlFrameIndex,
+  getGeckoTravelDuration,
+} from '../game/geckoMotion'
+import {
+  getMouseDirection,
+  getMousePerspectiveScale,
+  getMouseResumeProgress,
+  getMouseRunFrameIndex,
+  getMouseSpriteKind,
+  getMouseSpriteRotation,
+  getMouseTravelProgress,
+  isMouseTravelPaused,
+  pickNextMouseTarget,
+  type MouseDirection,
+  type MouseSpriteKind,
+} from '../game/mouseMotion'
 
 type Props = {
   gameId: GameId
@@ -32,7 +54,7 @@ type PondDecoration = {
   kind: 'plant' | 'rock' | 'lily'
 }
 
-type RoundPhase = 'cue' | 'target' | 'held' | 'reward' | 'miss'
+type RoundPhase = 'cue' | 'emerge' | 'target' | 'held' | 'reward' | 'miss'
 
 type Round = {
   id: number
@@ -40,6 +62,8 @@ type Round = {
   phaseStartedAt: number
   spawnX: number
   spawnY: number
+  holeX: number
+  holeY: number
   targetX: number
   targetY: number
   controlX: number
@@ -52,11 +76,18 @@ type Round = {
   color: string
   accent: string
   bubbleDuration: number
+  emergeDuration: number
   swimDuration: number
   rewardUntil: number
   missUntil: number
   bornAt: number
+  travelProgress: number
+  runDistance: number
+  mousePaused: boolean
+  mouseDirection: MouseDirection
 }
+
+type MouseSprites = Record<MouseSpriteKind, HTMLImageElement | null>
 
 type SimpleRipple = {
   id: number
@@ -73,6 +104,19 @@ const fishTypes = [
   { type: 'white flash', color: '#fff9d8', accent: '#ffe66b' },
   { type: 'deep teal', color: '#57d8ca', accent: '#f7ff9b' },
 ]
+
+const MOUSE_BACKGROUND_SRC = '/game-assets/mouse/meadow-burrow-bg.webp'
+const MOUSE_SPRITE_SRC = '/game-assets/mouse/mouse-run-side-stable-v2-sheet.png'
+const MOUSE_AWAY_SPRITE_SRC = '/game-assets/mouse/mouse-run-away-sheet.png'
+const MOUSE_TOWARD_SPRITE_SRC = '/game-assets/mouse/mouse-run-toward-sheet.png'
+const MOUSE_SPRITE_COLUMNS = 4
+const MOUSE_SPRITE_ROWS = 2
+const MOUSE_SPRITE_FRAMES = MOUSE_SPRITE_COLUMNS * MOUSE_SPRITE_ROWS
+const GECKO_BACKGROUND_SRC = '/game-assets/gecko/ivory-plaster-wall-bg.webp'
+const GECKO_SPRITE_SRC = '/game-assets/gecko/gecko-crawl-top-sheet.png'
+const GECKO_SPRITE_COLUMNS = 4
+const GECKO_SPRITE_ROWS = 2
+const GECKO_SPRITE_FRAMES = GECKO_SPRITE_COLUMNS * GECKO_SPRITE_ROWS
 
 const targetStyles: Record<GameId, { type: string; color: string; accent: string }> = {
   fish: fishTypes[0],
@@ -99,13 +143,13 @@ type GameProfile = {
 
 const gameProfiles: Record<GameId, GameProfile> = {
   fish: { scene: 'pond', movement: 'swim', pace: 0.78, size: 1.34, cueDuration: [1.45, 2.35] },
-  mouse: { scene: 'meadow', movement: 'run', pace: 0.7, size: 1.34, cueDuration: [1.35, 2.15] },
+  mouse: { scene: 'meadow', movement: 'run', pace: 0.7, size: 1.34, cueDuration: [0.55, 0.8] },
   dragonfly: { scene: 'air', movement: 'flutter', pace: 0.66, size: 1.12, cueDuration: [1.25, 2.05] },
   butterfly: { scene: 'flowers', movement: 'flutter', pace: 0.64, size: 1.22, cueDuration: [1.25, 2] },
   bird: { scene: 'branch', movement: 'dash', pace: 0.6, size: 1.18, cueDuration: [1.15, 1.9] },
   cricket: { scene: 'meadow', movement: 'hop', pace: 0.56, size: 1.08, cueDuration: [1.05, 1.85] },
   frog: { scene: 'pond', movement: 'hop', pace: 0.54, size: 1.18, cueDuration: [1.05, 1.75] },
-  gecko: { scene: 'wall', movement: 'crawl', pace: 0.5, size: 1.02, cueDuration: [0.95, 1.7] },
+  gecko: { scene: 'wall', movement: 'crawl', pace: 0.34, size: 1.02, cueDuration: [0.12, 0.2] },
   beetle: { scene: 'leaves', movement: 'skitter', pace: 0.48, size: 0.96, cueDuration: [0.9, 1.6] },
   snake: { scene: 'sand', movement: 'slither', pace: 0.44, size: 1.05, cueDuration: [0.85, 1.5] },
   squirrel: { scene: 'branch', movement: 'dash', pace: 0.42, size: 1.04, cueDuration: [0.8, 1.45] },
@@ -131,6 +175,13 @@ function createDecorations(): PondDecoration[] {
 
 function pickSpawn(width: number, height: number, gameId: GameId) {
   const profile = getProfile(gameId)
+
+  if (gameId === 'mouse') {
+    return {
+      x: width * 0.5,
+      y: height * 0.61,
+    }
+  }
 
   if (profile.scene === 'meadow' || profile.scene === 'leaves' || profile.scene === 'sand') {
     return {
@@ -166,30 +217,31 @@ function pickSpawn(width: number, height: number, gameId: GameId) {
   }
 }
 
-function pickTarget(width: number, height: number, x: number, y: number, gameId: GameId) {
-  const profile = getProfile(gameId)
-  const groundY = profile.scene === 'meadow' || profile.scene === 'leaves' || profile.scene === 'sand'
-  const upperY = profile.scene === 'air' || profile.scene === 'flowers' || profile.scene === 'branch' || profile.scene === 'night'
-  const exits = [
-    {
-      x: -80,
-      y: groundY ? rand(height * 0.64, height * 0.84) : upperY ? rand(height * 0.16, height * 0.62) : rand(height * 0.2, height * 0.82),
-      distance: x,
-    },
-    {
-      x: width + 80,
-      y: groundY ? rand(height * 0.64, height * 0.84) : upperY ? rand(height * 0.16, height * 0.62) : rand(height * 0.2, height * 0.82),
-      distance: width - x,
-    },
-    { x: rand(width * 0.16, width * 0.84), y: -70, distance: upperY ? y : y * 0.5 },
-    {
-      x: rand(width * 0.16, width * 0.84),
-      y: height + 70,
-      distance: upperY ? height - y : (height - y) * 0.35,
-    },
-  ]
+function pickTarget(
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  gameId: GameId,
+  targetSize: number,
+  previousMouseDirection: MouseDirection | null = null,
+) {
+  if (gameId === 'mouse') {
+    const bounds = getMovementBounds(width, height, gameId, targetSize)
+    return pickNextMouseTarget(
+      bounds,
+      { x, y },
+      previousMouseDirection,
+    ).target
+  }
 
-  return exits.sort((a, b) => b.distance - a.distance)[0]
+  return pickNextInBoundsTarget(
+    width,
+    height,
+    { x, y },
+    gameId,
+    targetSize,
+  )
 }
 
 function createControlPoint(
@@ -219,7 +271,7 @@ function quadraticPoint(start: number, control: number, end: number, amount: num
 }
 
 function getMovementPoint(round: Round, progress: number, now: number) {
-  const eased = easeOutCubic(progress)
+  const eased = progress
   let x = quadraticPoint(round.spawnX, round.controlX, round.targetX, eased)
   let y = quadraticPoint(round.spawnY, round.controlY, round.targetY, eased)
   const distance = Math.hypot(round.targetX - round.spawnX, round.targetY - round.spawnY)
@@ -235,7 +287,7 @@ function getMovementPoint(round: Round, progress: number, now: number) {
     y += Math.sin(progress * Math.PI * 5) * 22
   } else if (round.gameId === 'cricket' || round.gameId === 'frog') {
     y -= hop * (round.gameId === 'frog' ? 76 : 58)
-  } else if (round.gameId === 'gecko' || round.gameId === 'beetle') {
+  } else if (round.gameId === 'beetle') {
     x += wobble * 0.45
     y += Math.sin(progress * Math.PI * 9 + round.id) * 12
   } else if (round.gameId === 'snake') {
@@ -249,6 +301,78 @@ function getMovementPoint(round: Round, progress: number, now: number) {
   return { x, y }
 }
 
+function getTravelDuration(
+  distance: number,
+  config: DifficultyConfig,
+  gameId: GameId,
+) {
+  const pace = getProfile(gameId).pace
+  if (gameId === 'mouse') {
+    return Math.max(3, Math.min(4.5, distance / (config.fishSpeed * 3)))
+  }
+
+  if (gameId === 'gecko') {
+    return getGeckoTravelDuration(distance, config.fishSpeed)
+  }
+
+  return Math.max(3.4, Math.min(7.8, distance / (config.fishSpeed * pace)))
+}
+
+function beginNextPath(
+  round: Round,
+  width: number,
+  height: number,
+  config: DifficultyConfig,
+  now: number,
+) {
+  const bounds = getMovementBounds(
+    width,
+    height,
+    round.gameId,
+    round.fishSize,
+  )
+  const start = clampToMovementBounds(
+    { x: round.fishX, y: round.fishY },
+    bounds,
+  )
+  const target = pickTarget(
+    width,
+    height,
+    start.x,
+    start.y,
+    round.gameId,
+    round.fishSize,
+    round.gameId === 'mouse' ? round.mouseDirection : null,
+  )
+  const control = clampToMovementBounds(
+    createControlPoint(
+      width,
+      height,
+      start.x,
+      start.y,
+      target.x,
+      target.y,
+    ),
+    bounds,
+  )
+  const distance = Math.hypot(target.x - start.x, target.y - start.y)
+
+  round.spawnX = start.x
+  round.spawnY = start.y
+  round.fishX = start.x
+  round.fishY = start.y
+  round.targetX = target.x
+  round.targetY = target.y
+  round.mouseDirection = getMouseDirection(target.x - start.x, target.y - start.y)
+  round.controlX = control.x
+  round.controlY = control.y
+  round.swimDuration = getTravelDuration(distance, config, round.gameId)
+  round.travelProgress = 0
+  round.phaseStartedAt = now
+  round.bornAt = now
+  round.mousePaused = false
+}
+
 function createRound(
   id: number,
   width: number,
@@ -257,17 +381,36 @@ function createRound(
   now: number,
   gameId: GameId,
 ): Round {
-  const spawn = pickSpawn(width, height, gameId)
-  const target = pickTarget(width, height, spawn.x, spawn.y, gameId)
-  const control = createControlPoint(width, height, spawn.x, spawn.y, target.x, target.y)
+  const profile = getProfile(gameId)
+  const targetSize = config.fishSize * profile.size
+  const fishSize =
+    gameId === 'mouse'
+      ? Math.min(targetSize, Math.max(30, width * 0.042))
+      : targetSize
+  const bounds = getMovementBounds(width, height, gameId, fishSize)
+  const spawn = clampToMovementBounds(pickSpawn(width, height, gameId), bounds)
+  const target = pickTarget(
+    width,
+    height,
+    spawn.x,
+    spawn.y,
+    gameId,
+    fishSize,
+  )
+  const control = clampToMovementBounds(
+    createControlPoint(width, height, spawn.x, spawn.y, target.x, target.y),
+    bounds,
+  )
   const fishType =
     gameId === 'fish'
       ? fishTypes[Math.floor(Math.random() * fishTypes.length)]
       : targetStyles[gameId]
   const distance = Math.hypot(target.x - spawn.x, target.y - spawn.y)
-  const profile = getProfile(gameId)
-  const pace = profile.pace
-  const swimDuration = Math.max(3.4, Math.min(7.8, distance / (config.fishSpeed * pace)))
+  const swimDuration = getTravelDuration(distance, config, gameId)
+  const mouseDirection = getMouseDirection(
+    target.x - spawn.x,
+    target.y - spawn.y,
+  )
 
   return {
     id,
@@ -275,22 +418,29 @@ function createRound(
     phaseStartedAt: now,
     spawnX: spawn.x,
     spawnY: spawn.y,
+    holeX: spawn.x,
+    holeY: spawn.y,
     targetX: target.x,
     targetY: target.y,
     controlX: control.x,
     controlY: control.y,
     fishX: spawn.x,
     fishY: spawn.y,
-    fishSize: config.fishSize * profile.size,
+    fishSize,
     fishType: fishType.type,
     gameId,
     color: fishType.color,
     accent: fishType.accent,
     bubbleDuration: rand(profile.cueDuration[0], profile.cueDuration[1]),
+    emergeDuration: gameId === 'mouse' ? rand(0.38, 0.52) : 0,
     swimDuration,
     rewardUntil: 0,
     missUntil: 0,
     bornAt: 0,
+    travelProgress: 0,
+    runDistance: 0,
+    mousePaused: false,
+    mouseDirection,
   }
 }
 
@@ -493,13 +643,55 @@ function drawSandScene(ctx: CanvasRenderingContext2D, width: number, height: num
   ctx.restore()
 }
 
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+) {
+  if (!image.complete || !image.naturalWidth || !image.naturalHeight) {
+    return false
+  }
+
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
+  const drawWidth = image.naturalWidth * scale
+  const drawHeight = image.naturalHeight * scale
+  const x = (width - drawWidth) / 2
+  const y = (height - drawHeight) / 2
+
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(image, x, y, drawWidth, drawHeight)
+  ctx.restore()
+  return true
+}
+
 function drawScene(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   gameId: GameId,
+  mouseBackground: HTMLImageElement | null,
+  geckoBackground: HTMLImageElement | null,
 ) {
   const scene = getProfile(gameId).scene
+
+  if (
+    gameId === 'mouse' &&
+    mouseBackground &&
+    drawImageCover(ctx, mouseBackground, width, height)
+  ) {
+    return
+  }
+
+  if (
+    gameId === 'gecko' &&
+    geckoBackground &&
+    drawImageCover(ctx, geckoBackground, width, height)
+  ) {
+    return
+  }
 
   if (scene === 'meadow') {
     drawMeadow(ctx, width, height)
@@ -607,6 +799,50 @@ function drawCue(
 
   const profile = getProfile(round.gameId)
 
+  if (round.gameId === 'mouse') {
+    const intensity = Math.min(1, age / Math.max(0.2, round.bubbleDuration))
+    ctx.save()
+    ctx.lineCap = 'round'
+
+    for (let i = -2; i <= 2; i += 1) {
+      const sway = Math.sin(age * 15 + i * 1.7) * (2 + intensity * 4)
+      ctx.strokeStyle = i % 2 ? 'rgba(111, 82, 43, 0.72)' : 'rgba(145, 112, 63, 0.66)'
+      ctx.lineWidth = 1.5 + (i % 2 ? 0.6 : 0)
+      const baseX = round.holeX + i * 12
+      const baseY = round.holeY - 17 + Math.abs(i) * 2
+      ctx.beginPath()
+      ctx.moveTo(baseX, baseY)
+      ctx.quadraticCurveTo(
+        baseX + sway,
+        baseY - 7,
+        baseX + sway * 0.7,
+        baseY - 14 - Math.abs(i),
+      )
+      ctx.stroke()
+    }
+
+    for (let i = 0; i < 5; i += 1) {
+      const phase = (age * 1.9 + i * 0.23) % 1
+      const direction = i % 2 ? -1 : 1
+      ctx.globalAlpha = (1 - phase) * 0.5 * intensity
+      ctx.fillStyle = i % 2 ? '#8e6c43' : '#b08a55'
+      ctx.beginPath()
+      ctx.ellipse(
+        round.holeX + direction * (10 + phase * 24),
+        round.holeY - 2 - phase * 8,
+        2.2,
+        1.2,
+        phase * direction,
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+    }
+
+    ctx.restore()
+    return
+  }
+
   if (profile.scene === 'meadow' || profile.scene === 'leaves') {
     const pulse = (Math.sin(age * 5) + 1) / 2
     ctx.save()
@@ -634,19 +870,7 @@ function drawCue(
   }
 
   if (profile.scene === 'wall') {
-    const pulse = (Math.sin(age * 6) + 1) / 2
-    ctx.save()
-    ctx.globalAlpha = 0.52
-    ctx.strokeStyle = '#fff2a6'
-    ctx.lineWidth = 4
-    ctx.beginPath()
-    ctx.arc(round.spawnX, round.spawnY, 18 + pulse * 14, 0, Math.PI * 2)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(round.spawnX - 28, round.spawnY + 10)
-    ctx.quadraticCurveTo(round.spawnX, round.spawnY - 18 - pulse * 8, round.spawnX + 30, round.spawnY + 8)
-    ctx.stroke()
-    ctx.restore()
+    // The realistic gecko starts quietly on the wall without a synthetic glow.
     return
   }
 
@@ -877,6 +1101,157 @@ function drawMouse(ctx: CanvasRenderingContext2D, round: Round, now: number) {
   ctx.arc(round.fishSize * 0.43, -round.fishSize * 0.14, round.fishSize * 0.07, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
+}
+
+function drawRealisticMouse(
+  ctx: CanvasRenderingContext2D,
+  round: Round,
+  sprites: MouseSprites,
+  canvasWidth: number,
+  canvasHeight: number,
+  emergeProgress = 1,
+) {
+  const spriteKind = getMouseSpriteKind(round.mouseDirection)
+  const sprite = sprites[spriteKind] ?? sprites.side
+  if (!sprite || !sprite.complete || !sprite.naturalWidth || !sprite.naturalHeight) {
+    return false
+  }
+
+  const frameIndex =
+    round.phase === 'held' || round.mousePaused
+      ? 7
+      : getMouseRunFrameIndex(round.runDistance, round.fishSize, MOUSE_SPRITE_FRAMES)
+  const column = frameIndex % MOUSE_SPRITE_COLUMNS
+  const row = Math.floor(frameIndex / MOUSE_SPRITE_COLUMNS)
+  const sourceWidth = sprite.naturalWidth / MOUSE_SPRITE_COLUMNS
+  const sourceHeight = sprite.naturalHeight / MOUSE_SPRITE_ROWS
+  const easedEmergence = easeOutCubic(clamp01(emergeProgress))
+  const bounds = getMovementBounds(
+    canvasWidth,
+    canvasHeight,
+    'mouse',
+    round.fishSize,
+  )
+  const perspectiveScale = getMousePerspectiveScale(
+    round.fishY,
+    bounds.minY,
+    bounds.maxY,
+  )
+  const emergenceScale = 0.38 + easedEmergence * 0.62
+  const scale = perspectiveScale * emergenceScale
+  const drawWidth =
+    round.fishSize * (spriteKind === 'side' ? 4.4 : 5.6) * scale
+  const drawHeight = drawWidth * (sourceHeight / sourceWidth)
+  const anchorY =
+    spriteKind === 'side' ? 100 / 120 : spriteKind === 'away' ? 0.47 : 0.62
+  const mirror =
+    spriteKind === 'side' && round.mouseDirection === 'left' ? -1 : 1
+  const rotation = getMouseSpriteRotation(round.mouseDirection)
+  const pathAngle = Math.atan2(
+    round.targetY - round.spawnY,
+    round.targetX - round.spawnX,
+  )
+
+  ctx.save()
+  ctx.globalAlpha = 0.14 + easedEmergence * 0.14
+  ctx.fillStyle = '#171008'
+  ctx.translate(round.fishX, round.fishY + 1)
+  ctx.rotate(pathAngle)
+  ctx.beginPath()
+  ctx.ellipse(
+    0,
+    0,
+    round.fishSize * perspectiveScale * (0.48 + easedEmergence * 0.5),
+    round.fishSize * perspectiveScale * 0.15,
+    0,
+    0,
+    Math.PI * 2,
+  )
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(rotation)
+  ctx.scale(mirror, 1)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(
+    sprite,
+    column * sourceWidth,
+    row * sourceHeight,
+    sourceWidth,
+    sourceHeight,
+    -drawWidth / 2,
+    -drawHeight * anchorY,
+    drawWidth,
+    drawHeight,
+  )
+  ctx.restore()
+
+  return true
+}
+
+function drawRealisticGecko(
+  ctx: CanvasRenderingContext2D,
+  round: Round,
+  sprite: HTMLImageElement | null,
+) {
+  if (!sprite || !sprite.complete || !sprite.naturalWidth || !sprite.naturalHeight) {
+    return false
+  }
+
+  const frameIndex = getGeckoCrawlFrameIndex(
+    round.runDistance,
+    round.fishSize,
+    GECKO_SPRITE_FRAMES,
+  )
+  const column = frameIndex % GECKO_SPRITE_COLUMNS
+  const row = Math.floor(frameIndex / GECKO_SPRITE_COLUMNS)
+  const sourceWidth = sprite.naturalWidth / GECKO_SPRITE_COLUMNS
+  const sourceHeight = sprite.naturalHeight / GECKO_SPRITE_ROWS
+  const drawWidth = round.fishSize * 6.4
+  const drawHeight = drawWidth * (sourceHeight / sourceWidth)
+  const pathProgress = clamp01(round.travelProgress)
+  const tangentX =
+    2 * (1 - pathProgress) * (round.controlX - round.spawnX) +
+    2 * pathProgress * (round.targetX - round.controlX)
+  const tangentY =
+    2 * (1 - pathProgress) * (round.controlY - round.spawnY) +
+    2 * pathProgress * (round.targetY - round.controlY)
+  const pathAngle = Math.atan2(tangentY, tangentX)
+
+  const drawFrame = () => {
+    ctx.drawImage(
+      sprite,
+      column * sourceWidth,
+      row * sourceHeight,
+      sourceWidth,
+      sourceHeight,
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight,
+    )
+  }
+
+  ctx.save()
+  ctx.translate(round.fishX + 3, round.fishY + 4)
+  ctx.rotate(pathAngle)
+  ctx.globalAlpha = 0.16
+  ctx.filter = 'blur(3px) brightness(0)'
+  drawFrame()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(round.fishX, round.fishY)
+  ctx.rotate(pathAngle)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  drawFrame()
+  ctx.restore()
+
+  return true
 }
 
 function drawDragonfly(ctx: CanvasRenderingContext2D, round: Round, now: number) {
@@ -1121,9 +1496,36 @@ function drawFirefly(ctx: CanvasRenderingContext2D, round: Round, now: number) {
   ctx.restore()
 }
 
-function drawTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+function drawTarget(
+  ctx: CanvasRenderingContext2D,
+  round: Round,
+  now: number,
+  mouseSprites: MouseSprites,
+  geckoSprite: HTMLImageElement | null,
+  canvasWidth: number,
+  canvasHeight: number,
+  emergeProgress = 1,
+) {
   if (round.gameId === 'mouse') {
-    drawMouse(ctx, round, now)
+    if (
+      !drawRealisticMouse(
+        ctx,
+        round,
+        mouseSprites,
+        canvasWidth,
+        canvasHeight,
+        emergeProgress,
+      )
+    ) {
+      drawMouse(ctx, round, now)
+    }
+    return
+  }
+
+  if (round.gameId === 'gecko') {
+    if (!drawRealisticGecko(ctx, round, geckoSprite)) {
+      drawCrawlerTarget(ctx, round, now)
+    }
     return
   }
 
@@ -1142,7 +1544,7 @@ function drawTarget(ctx: CanvasRenderingContext2D, round: Round, now: number) {
     return
   }
 
-  if (round.gameId === 'gecko' || round.gameId === 'beetle') {
+  if (round.gameId === 'beetle') {
     drawCrawlerTarget(ctx, round, now)
     return
   }
@@ -1237,6 +1639,30 @@ function drawReward(ctx: CanvasRenderingContext2D, round: Round, now: number) {
   ctx.restore()
 }
 
+function drawMouseReward(ctx: CanvasRenderingContext2D, round: Round, now: number) {
+  const progress = clamp01((now - round.phaseStartedAt) / 0.46)
+
+  ctx.save()
+  for (let i = 0; i < 9; i += 1) {
+    const angle = (Math.PI * 2 * i) / 9 + round.id * 0.37
+    const distance = 8 + progress * (20 + (i % 3) * 7)
+    ctx.globalAlpha = (1 - progress) * 0.55
+    ctx.fillStyle = i % 2 ? '#92704a' : '#b49361'
+    ctx.beginPath()
+    ctx.ellipse(
+      round.fishX + Math.cos(angle) * distance,
+      round.fishY - 4 + Math.sin(angle) * distance * 0.35,
+      2.8 + (i % 2),
+      1.4 + (i % 3) * 0.3,
+      angle,
+      0,
+      Math.PI * 2,
+    )
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
 function drawMissOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, round: Round, now: number) {
   const progress = clamp01((now - round.phaseStartedAt) / 0.42)
   ctx.save()
@@ -1260,6 +1686,12 @@ export function GameCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationRef = useRef<number>(0)
   const roundRef = useRef<Round | null>(null)
+  const mouseBackgroundRef = useRef<HTMLImageElement | null>(null)
+  const mouseSpriteRef = useRef<HTMLImageElement | null>(null)
+  const mouseAwaySpriteRef = useRef<HTMLImageElement | null>(null)
+  const mouseTowardSpriteRef = useRef<HTMLImageElement | null>(null)
+  const geckoBackgroundRef = useRef<HTMLImageElement | null>(null)
+  const geckoSpriteRef = useRef<HTMLImageElement | null>(null)
   const rippleRef = useRef<SimpleRipple[]>([])
   const activePointerIdRef = useRef<number | null>(null)
   const statsRef = useRef({
@@ -1285,6 +1717,74 @@ export function GameCanvas({
   const t = copy[language]
   const selectedDuration = durationToSeconds(settings.duration)
   const isEndless = isEndlessDuration(settings.duration)
+
+  useEffect(() => {
+    if (gameId !== 'mouse') {
+      mouseBackgroundRef.current = null
+      mouseSpriteRef.current = null
+      mouseAwaySpriteRef.current = null
+      mouseTowardSpriteRef.current = null
+      return
+    }
+
+    const background = new Image()
+    const sprite = new Image()
+    const awaySprite = new Image()
+    const towardSprite = new Image()
+    background.decoding = 'async'
+    sprite.decoding = 'async'
+    awaySprite.decoding = 'async'
+    towardSprite.decoding = 'async'
+    background.src = MOUSE_BACKGROUND_SRC
+    sprite.src = MOUSE_SPRITE_SRC
+    awaySprite.src = MOUSE_AWAY_SPRITE_SRC
+    towardSprite.src = MOUSE_TOWARD_SPRITE_SRC
+    mouseBackgroundRef.current = background
+    mouseSpriteRef.current = sprite
+    mouseAwaySpriteRef.current = awaySprite
+    mouseTowardSpriteRef.current = towardSprite
+
+    return () => {
+      if (mouseBackgroundRef.current === background) {
+        mouseBackgroundRef.current = null
+      }
+      if (mouseSpriteRef.current === sprite) {
+        mouseSpriteRef.current = null
+      }
+      if (mouseAwaySpriteRef.current === awaySprite) {
+        mouseAwaySpriteRef.current = null
+      }
+      if (mouseTowardSpriteRef.current === towardSprite) {
+        mouseTowardSpriteRef.current = null
+      }
+    }
+  }, [gameId])
+
+  useEffect(() => {
+    if (gameId !== 'gecko') {
+      geckoBackgroundRef.current = null
+      geckoSpriteRef.current = null
+      return
+    }
+
+    const background = new Image()
+    const sprite = new Image()
+    background.decoding = 'async'
+    sprite.decoding = 'async'
+    background.src = GECKO_BACKGROUND_SRC
+    sprite.src = GECKO_SPRITE_SRC
+    geckoBackgroundRef.current = background
+    geckoSpriteRef.current = sprite
+
+    return () => {
+      if (geckoBackgroundRef.current === background) {
+        geckoBackgroundRef.current = null
+      }
+      if (geckoSpriteRef.current === sprite) {
+        geckoSpriteRef.current = null
+      }
+    }
+  }, [gameId])
 
   const buildStats = useCallback(() => {
     const stats = statsRef.current
@@ -1420,6 +1920,11 @@ export function GameCanvas({
       const height = canvas.height / dpr
       const dt = Math.min(0.04, (time - previous) / 1000)
       const now = time / 1000
+      const mouseSprites: MouseSprites = {
+        side: mouseSpriteRef.current,
+        away: mouseAwaySpriteRef.current,
+        toward: mouseTowardSpriteRef.current,
+      }
       previous = time
 
       if (!roundRef.current) {
@@ -1429,26 +1934,110 @@ export function GameCanvas({
       const round = roundRef.current
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      drawScene(ctx, width, height, gameId)
+      drawScene(
+        ctx,
+        width,
+        height,
+        gameId,
+        mouseBackgroundRef.current,
+        geckoBackgroundRef.current,
+      )
 
       if (!paused && !pageHidden) {
         if (round.phase === 'cue') {
           if (now - round.phaseStartedAt >= round.bubbleDuration) {
-            round.phase = 'target'
+            round.phase = gameId === 'mouse' ? 'emerge' : 'target'
             round.phaseStartedAt = now
             round.bornAt = now
           }
-        } else if (round.phase === 'target') {
-          const progress = clamp01((now - round.phaseStartedAt) / round.swimDuration)
-          const point = getMovementPoint(round, progress, now)
-          round.fishX = point.x
-          round.fishY = point.y
+        } else if (round.phase === 'emerge') {
+          const progress = clamp01(
+            (now - round.phaseStartedAt) / round.emergeDuration,
+          )
+          const directionX = round.targetX - round.holeX
+          const directionY = round.targetY - round.holeY
+          const directionLength = Math.max(
+            1,
+            Math.hypot(directionX, directionY),
+          )
+          round.fishX =
+            round.holeX +
+            (directionX / directionLength) *
+              easeOutCubic(progress) *
+              round.fishSize *
+              0.9
+          round.fishY =
+            round.holeY +
+            (directionY / directionLength) *
+              easeOutCubic(progress) *
+              round.fishSize *
+              0.9 -
+            Math.sin(progress * Math.PI) * round.fishSize * 0.08
 
           if (progress >= 1) {
-            round.phase = 'miss'
+            round.phase = 'target'
             round.phaseStartedAt = now
-            round.missUntil = now + 1.05
-            statsRef.current.quietIntervals += 1
+            round.bornAt = now
+            round.spawnX = round.fishX
+            round.spawnY = round.fishY
+            const bounds = getMovementBounds(
+              width,
+              height,
+              round.gameId,
+              round.fishSize,
+            )
+            const control = clampToMovementBounds(
+              createControlPoint(
+                width,
+                height,
+                round.spawnX,
+                round.spawnY,
+                round.targetX,
+                round.targetY,
+              ),
+              bounds,
+            )
+            round.controlX = control.x
+            round.controlY = control.y
+            round.travelProgress = 0
+            round.runDistance = 0
+          }
+        } else if (round.phase === 'target') {
+          const bounds = getMovementBounds(
+            width,
+            height,
+            round.gameId,
+            round.fishSize,
+          )
+          const safeTarget = clampToMovementBounds(
+            { x: round.targetX, y: round.targetY },
+            bounds,
+          )
+          if (
+            safeTarget.x !== round.targetX ||
+            safeTarget.y !== round.targetY
+          ) {
+            beginNextPath(round, width, height, config, now)
+          }
+
+          round.travelProgress = clamp01(
+            round.travelProgress + dt / round.swimDuration,
+          )
+          const progress = round.travelProgress
+          const travelProgress =
+            gameId === 'mouse' ? getMouseTravelProgress(progress) : progress
+          const point = getMovementPoint(round, travelProgress, now)
+          round.runDistance += Math.hypot(
+            point.x - round.fishX,
+            point.y - round.fishY,
+          )
+          round.fishX = point.x
+          round.fishY = point.y
+          round.mousePaused =
+            gameId === 'mouse' && isMouseTravelPaused(progress)
+
+          if (progress >= 1) {
+            beginNextPath(round, width, height, config, now)
           }
         } else if (round.phase === 'reward' && now >= round.rewardUntil) {
           roundRef.current = createRound(nextIdRef.current++, width, height, config, now, gameId)
@@ -1470,22 +2059,61 @@ export function GameCanvas({
         drawCue(ctx, visibleRound, now)
       }
 
+      if (visibleRound.phase === 'emerge') {
+        const emergeProgress = clamp01(
+          (now - visibleRound.phaseStartedAt) / visibleRound.emergeDuration,
+        )
+        drawTarget(
+          ctx,
+          visibleRound,
+          now,
+          mouseSprites,
+          geckoSpriteRef.current,
+          width,
+          height,
+          emergeProgress,
+        )
+      }
+
       if (visibleRound.phase === 'target') {
-        drawCue(ctx, visibleRound, now)
-        drawTarget(ctx, visibleRound, now)
+        drawTarget(
+          ctx,
+          visibleRound,
+          now,
+          mouseSprites,
+          geckoSpriteRef.current,
+          width,
+          height,
+        )
       }
 
       if (visibleRound.phase === 'held') {
-        drawTarget(ctx, visibleRound, now)
+        drawTarget(
+          ctx,
+          visibleRound,
+          now,
+          mouseSprites,
+          geckoSpriteRef.current,
+          width,
+          height,
+        )
       }
 
       if (visibleRound.phase === 'reward') {
-        drawReward(ctx, visibleRound, now)
+        if (gameId === 'mouse') {
+          drawMouseReward(ctx, visibleRound, now)
+        } else {
+          drawReward(ctx, visibleRound, now)
+        }
       }
 
       rippleRef.current.forEach((ripple) => drawRipple(ctx, ripple))
 
-      if (visibleRound.phase === 'miss') {
+      if (
+        visibleRound.phase === 'miss' &&
+        gameId !== 'mouse' &&
+        gameId !== 'gecko'
+      ) {
         drawMissOverlay(ctx, width, height, visibleRound, now)
       }
 
@@ -1534,40 +2162,19 @@ export function GameCanvas({
       return
     }
 
-    const point = getCanvasPoint(event)
-    if (point) {
-      round.fishX = point.x
-      round.fishY = point.y
-    }
-
     const now = performance.now() / 1000
     activePointerIdRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
 
-    sound.playSplash(config.soundIntensity)
-    round.phase = 'reward'
+    if (round.gameId === 'mouse') {
+      round.travelProgress = getMouseResumeProgress(round.travelProgress)
+    }
+    round.phase = 'target'
     round.phaseStartedAt = now
-    round.rewardUntil = now + 1.18
-    rippleRef.current.push(
-      {
-        id: nextIdRef.current++,
-        x: round.fishX,
-        y: round.fishY,
-        age: 0,
-        maxAge: 0.85,
-        kind: 'catch',
-      },
-      {
-        id: nextIdRef.current++,
-        x: round.fishX,
-        y: round.fishY,
-        age: 0,
-        maxAge: 1.25,
-        kind: 'reward',
-      },
-    )
+    round.bornAt = now
+    round.mousePaused = false
   }
 
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -1601,16 +2208,20 @@ export function GameCanvas({
       event.currentTarget.setPointerCapture(event.pointerId)
       round.phase = 'held'
       round.phaseStartedAt = now
-      round.fishX = x
-      round.fishY = y
-      rippleRef.current.push({
-        id: nextIdRef.current++,
-        x,
-        y,
-        age: 0,
-        maxAge: 0.65,
-        kind: 'catch',
-      })
+      if (round.gameId !== 'mouse' && round.gameId !== 'gecko') {
+        rippleRef.current.push({
+          id: nextIdRef.current++,
+          x: round.fishX,
+          y: round.fishY,
+          age: 0,
+          maxAge: 0.65,
+          kind: 'catch',
+        })
+      }
+      return
+    }
+
+    if (round.gameId === 'mouse' || round.gameId === 'gecko') {
       return
     }
 
@@ -1622,26 +2233,6 @@ export function GameCanvas({
       maxAge: round.phase === 'cue' ? 0.7 : 0.5,
       kind: round.phase === 'cue' ? 'bubble' : 'tap',
     })
-  }
-
-  const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    const round = roundRef.current
-    if (
-      paused ||
-      !round ||
-      round.phase !== 'held' ||
-      activePointerIdRef.current !== event.pointerId
-    ) {
-      return
-    }
-
-    const point = getCanvasPoint(event)
-    if (!point) {
-      return
-    }
-
-    round.fishX = point.x
-    round.fishY = point.y
   }
 
   const handleStopPointerDown = () => {
@@ -1667,7 +2258,6 @@ export function GameCanvas({
         className="pond-canvas"
         aria-label={t.gameCanvas}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
         onPointerUp={releaseHeldTarget}
         onPointerCancel={releaseHeldTarget}
       />
@@ -1679,23 +2269,29 @@ export function GameCanvas({
         onPointerUp={clearStopHold}
         aria-label={isEndless ? t.holdToStop : t.stop}
       >
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M8 25 24 11l16 14v15H29V29H19v11H8z" />
+        <svg className="control-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path
+            className="control-icon-outline"
+            d="M10 25 15 20v-8l7 5 2-1 2 1 7-5v8l5 5v13H28v-9h-8v9H10z"
+          />
+          <path className="control-icon-accent" d="M18 23h3M27 23h3" />
         </svg>
       </button>
       <button
         className="corner-control corner-control-top-right"
         type="button"
         onClick={onPauseToggle}
-        aria-label={t.pauseGame}
+        aria-label={paused ? t.resume : t.pauseGame}
+        aria-pressed={paused}
       >
         {paused ? (
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M18 13v22l17-11z" />
+          <svg className="control-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path className="control-icon-outline" d="M17 13v22l19-11z" />
           </svg>
         ) : (
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M15 12h7v24h-7zM27 12h7v24h-7z" />
+          <svg className="control-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <rect className="control-icon-fill" x="14" y="12" width="8" height="24" rx="4" />
+            <rect className="control-icon-fill" x="27" y="12" width="8" height="24" rx="4" />
           </svg>
         )}
       </button>
@@ -1705,8 +2301,9 @@ export function GameCanvas({
         onClick={onPreviousGame}
         aria-label="previous game"
       >
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M15 24 31 12v24zM10 12h5v24h-5z" />
+        <svg className="control-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path className="control-icon-outline" d="M33 13 17 24l16 11" />
+          <path className="control-icon-outline" d="M11 14v20" />
         </svg>
       </button>
       <button
@@ -1715,8 +2312,9 @@ export function GameCanvas({
         onClick={onNextGame}
         aria-label="next game"
       >
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M33 24 17 12v24zM33 12h5v24h-5z" />
+        <svg className="control-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path className="control-icon-outline" d="m15 13 16 11-16 11" />
+          <path className="control-icon-outline" d="M37 14v20" />
         </svg>
       </button>
     </main>

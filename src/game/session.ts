@@ -7,7 +7,7 @@ import type {
 
 export const DEFAULT_SETTINGS: SessionSettings = {
   age: 'adult',
-  duration: 3,
+  duration: 'endless',
   fishCount: 1,
   personality: 'curious',
 }
